@@ -1,0 +1,1997 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>The Smoking Area</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    /* premium platinum-grey accent (the cigarette ember itself stays fire-orange in 3D) */
+    --ember:#9ba1ab; --ember-glow:#d9dde4; --hot:#eef1f6;
+    --ink:#eef1f6; --ink-dim:#9aa0ab; --ink-faint:#565b66;
+    --line:#23262e;
+    --font-ui: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-display: "Playfair Display", Georgia, "Times New Roman", serif;
+    /* premium frosted-glass system */
+    --glass: linear-gradient(155deg, rgba(255,255,255,.10), rgba(255,255,255,.028));
+    --glass-strong: linear-gradient(155deg, rgba(255,255,255,.16), rgba(255,255,255,.05));
+    --glass-brd: rgba(255,255,255,.16);
+    --glass-sh: 0 10px 34px rgba(0,0,0,.46), 0 1px 2px rgba(0,0,0,.4),
+                inset 0 1px 0 rgba(255,255,255,.24), inset 0 -10px 22px rgba(0,0,0,.16);
+    --blur: blur(26px) saturate(165%);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;
+    -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;}
+  /* the chat input stays fully editable / selectable */
+  input, textarea{ -webkit-user-select:text; user-select:text; -webkit-touch-callout:default; }
+  html,body{height:100%;margin:0;}
+  body{
+    background:#050607; color:var(--ink);
+    font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    overflow:hidden; user-select:none; touch-action:none;
+  }
+  canvas#c{position:fixed; inset:0; width:100%; height:100%; display:block;}
+
+  /* Floating messages layer */
+  #msgs{position:fixed; inset:0; pointer-events:none; z-index:4; overflow:hidden;}
+  .fmsg{
+    position:absolute; transform:translate(-50%,-50%);
+    font-size:15px; white-space:nowrap; letter-spacing:.01em;
+    text-shadow:0 0 12px rgba(0,0,0,.9), 0 2px 6px rgba(0,0,0,.8);
+    will-change:transform,opacity;
+  }
+  .fmsg.mine{color:#fff; font-weight:500;}
+
+  /* ---- Top status line ---- */
+  #hud{
+    position:fixed; top:0; left:0; right:0; padding:16px 18px;
+    display:flex; justify-content:space-between; align-items:flex-start;
+    font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim);
+    pointer-events:none; z-index:5;
+  }
+  #hud .wm{
+    background:var(--glass); border:1px solid var(--glass-brd);
+    box-shadow:var(--glass-sh); backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur);
+    padding:9px 15px; border-radius:14px;
+  }
+  /* status reads straight on the scene — no panel behind it */
+  #hud .right{ padding:9px 4px; text-shadow:0 1px 10px rgba(0,0,0,.9), 0 0 3px rgba(0,0,0,.8); }
+  #hud .wm{font-family:var(--font-display); font-style:italic; font-weight:450; letter-spacing:.01em;
+    text-transform:none; font-size:16px; color:var(--ink);
+    pointer-events:auto; cursor:pointer; transition:color .2s ease, box-shadow .2s ease, transform .12s ease;}
+  #hud .wm:hover{ color:#fff; box-shadow:var(--glass-sh), 0 0 0 1px var(--glass-brd); }
+  #hud .wm:active{ transform:translateY(1px); }
+  #hud .right{text-align:right; line-height:1.75;}
+  #handle{color:var(--ember-glow);}
+  #count b{color:var(--ink); font-variant-numeric:tabular-nums;}
+
+  /* ---- Controls, anchored bottom-left so the held cigarette owns the right ---- */
+  #dock{
+    position:fixed; left:22px; right:auto; bottom:calc(20px + env(safe-area-inset-bottom)); z-index:5;
+    display:flex; flex-direction:column; align-items:flex-start; gap:11px;
+    padding:0; pointer-events:none; transition:opacity .5s ease;
+  }
+  #tray{display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-start; pointer-events:auto;}
+
+  /* one glass material for every pill */
+  #backBtn, .smoke-btn, .style-chip{
+    pointer-events:auto; cursor:pointer; font-family:inherit;
+    background:var(--glass); border:1px solid var(--glass-brd); box-shadow:var(--glass-sh);
+    backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur);
+    color:var(--ink); border-radius:999px;
+    transition:transform .12s ease, box-shadow .25s ease, border-color .25s ease, color .2s ease, background .25s ease;
+  }
+  #backBtn:hover, .smoke-btn:hover, .style-chip:hover{
+    background:var(--glass-strong); border-color:rgba(255,255,255,.28); transform:translateY(-1px);
+    box-shadow:0 14px 40px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.3);
+  }
+  #backBtn:active, .smoke-btn:active, .style-chip:active{ transform:translateY(0); }
+
+  #backBtn{ align-self:flex-start; color:var(--ink-dim); padding:8px 14px; font-size:12px; letter-spacing:.07em; }
+  #backBtn:hover{ color:var(--ink); }
+
+  .smoke-btn{ padding:10px 15px; font-size:13px; letter-spacing:.02em; display:flex; align-items:center; gap:9px; }
+  .smoke-btn small{color:var(--ink-dim); font-size:11px; letter-spacing:.04em;}
+  .smoke-btn .dot{width:8px;height:8px;border-radius:50%;box-shadow:0 0 10px currentColor, 0 0 3px currentColor;}
+
+  #styles{display:flex; gap:7px; justify-content:flex-start; pointer-events:auto;}
+  #styles:empty{display:none;}
+  .style-chip{ color:var(--ink-dim); padding:6px 13px; font-size:12px; letter-spacing:.06em; }
+  .style-chip.on{
+    color:#191c20; font-weight:600;
+    background:linear-gradient(155deg, var(--ember-glow), var(--ember));
+    border-color:rgba(222,228,236,.6);
+    box-shadow:0 8px 24px rgba(150,160,175,.3), inset 0 1px 0 rgba(255,255,255,.5);
+  }
+  #puffHint{
+    pointer-events:none; font-size:11px; letter-spacing:.13em; text-transform:uppercase;
+    color:var(--ink-dim); min-height:14px; text-align:left; transition:opacity .3s;
+    text-shadow:0 1px 8px rgba(0,0,0,.9); max-width:300px; padding-left:2px;
+  }
+  #puffHint b{color:var(--ember-glow); font-weight:600;}
+
+  #say{
+    pointer-events:auto; display:flex; align-items:center; gap:8px; width:min(370px,82vw);
+    background:var(--glass); border:1px solid var(--glass-brd); border-radius:16px;
+    box-shadow:var(--glass-sh); backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur);
+    padding:7px 7px 7px 16px;
+  }
+  #say input{
+    flex:1; background:transparent; border:0; outline:0; color:var(--ink);
+    font-size:15px; font-family:inherit;
+  }
+  #say input::placeholder{color:var(--ink-faint);}
+  #say button{
+    border:0; color:#191c20; font-weight:600; cursor:pointer;
+    padding:10px 18px; border-radius:11px; font-size:14px; letter-spacing:.04em;
+    background:linear-gradient(180deg, var(--ember-glow), var(--ember));
+    box-shadow:0 5px 16px rgba(150,160,175,.38), inset 0 1px 0 rgba(255,255,255,.6), inset 0 -2px 6px rgba(70,76,86,.35);
+    transition:filter .2s ease, transform .12s ease, box-shadow .2s ease;
+  }
+  #say button:hover:not(:disabled){ filter:brightness(1.08); transform:translateY(-1px); }
+  #say button:disabled{opacity:.35; cursor:default; box-shadow:none;}
+
+  /* ---- Enter overlay ---- */
+  #enter{
+    position:fixed; inset:0; z-index:20; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; gap:22px; padding:24px;
+    /* transparent-ish so the shared smoke background shows through; subtle darkening keeps text legible */
+    background:radial-gradient(125% 95% at 50% 52%, rgba(9,10,13,.12) 0%, rgba(6,7,9,.5) 68%, rgba(4,5,7,.72) 100%);
+    transition:opacity 1.1s ease, transform 1.1s cubic-bezier(.4,0,.2,1);
+  }
+  /* real wispy smoke, banked at the bottom, drifting up forever */
+  #smokeFX{ position:fixed; inset:0; z-index:1; pointer-events:none;
+    /* resting state is VISIBLE — the fade-in is a transition, so the smoke can
+       never get stuck invisible if the animation timeline is paused at load */
+    opacity:.82; will-change:opacity,translate,scale; mix-blend-mode:screen;
+    transition:opacity 2.4s ease-out;
+    animation:smokeDrift 30s ease-in-out infinite; /* the loop start == end (no jump) */
+    /* feather every edge so the smoke never shows a hard cut on any side */
+    -webkit-mask-image:radial-gradient(78% 82% at 50% 56%, #000 0%, #000 30%, transparent 100%);
+    mask-image:radial-gradient(78% 82% at 50% 56%, #000 0%, #000 30%, transparent 100%);
+  }
+  #smokeFX.pre{ opacity:0; }        /* JS sets this for one frame to fade in from nothing */
+  #smokeFX svg{ width:100%; height:100%; display:block; }
+  body.in-room #smokeFX{ display:none; } /* the room has its own first-person smoke */
+  /* smooth GPU drift + breathing; scale stays >1 so it always covers, no edge peek.
+     There-and-back keyframes make the loop seam invisible. */
+  @keyframes smokeDrift{
+    0%{   translate:0 0;        scale:1.08; }
+    25%{  translate:-2% -2.5%;  scale:1.12; }
+    50%{  translate:1.5% -4%;   scale:1.16; }
+    75%{  translate:2% -1.5%;   scale:1.12; }
+    100%{ translate:0 0;        scale:1.08; }
+  }
+  #enter > *:not(#smokeFX){ position:relative; z-index:1; }
+  /* staggered content reveal */
+  @keyframes revealUp{
+    from{ opacity:0; transform:translateY(18px); filter:blur(7px); }
+    to{ opacity:1; transform:none; filter:blur(0); }
+  }
+  #enter .fine, #enter h1, #enter p, #enter button, #enter #whoami{
+    opacity:0; animation:revealUp 1s cubic-bezier(.2,.7,.2,1) forwards;
+  }
+  #enter .fine{ animation-delay:.7s; }
+  #enter h1{ animation-delay:1.0s; }
+  #enter p{ animation-delay:1.45s; }
+  #enter button{ animation-delay:1.85s; }
+  #enter #whoami{ animation-delay:2.2s; }
+  #enter h1{
+    font-family:var(--font-display); font-weight:600; font-style:normal;
+    font-size:clamp(38px,7.4vw,72px); margin:0; letter-spacing:-.015em;
+    text-wrap:balance; line-height:1.05;
+  }
+  #enter .glow{color:var(--ember-glow); text-shadow:0 0 40px rgba(205,214,228,.32);}
+  #enter p{max-width:min(60ch,90vw); color:var(--ink-dim); font-size:15px; line-height:1.6; margin:0; text-wrap:balance;}
+  #enter button{
+    margin-top:6px; cursor:pointer; color:var(--ink);
+    background:var(--glass); border:1px solid var(--glass-brd); border-radius:999px; padding:14px 34px;
+    font-size:14px; letter-spacing:.18em; text-transform:uppercase; font-family:inherit;
+    box-shadow:var(--glass-sh); backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur);
+    transition:transform .2s ease, box-shadow .3s ease, border-color .3s ease, background .3s ease;
+  }
+  #enter button:hover{
+    background:var(--glass-strong); border-color:rgba(214,220,230,.5); transform:translateY(-2px);
+    box-shadow:0 16px 44px rgba(0,0,0,.5), 0 0 30px rgba(180,190,206,.2), inset 0 1px 0 rgba(255,255,255,.3);
+  }
+  #enter .fine{font-size:11.5px; letter-spacing:.06em; color:var(--ink-faint); text-transform:uppercase;}
+  #enter.gone{opacity:0; pointer-events:none; transform:translateY(-8vh);}
+
+  /* right-side vertical cigarette-life panel (how much is left) */
+  #lifeMeter{
+    position:fixed; right:22px; top:50%; transform:translateY(-50%); z-index:5;
+    display:flex; flex-direction:column; align-items:center; gap:10px; pointer-events:none;
+    opacity:0; visibility:hidden; transition:opacity .55s ease;
+  }
+  body.smoking #lifeMeter{ opacity:1; visibility:visible; }
+  #lifeMeter .track{
+    width:10px; height:min(46vh,300px); border-radius:999px; overflow:hidden;
+    display:flex; align-items:flex-end;
+    background:var(--glass); border:1px solid var(--glass-brd); box-shadow:var(--glass-sh);
+    backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur);
+  }
+  #lifeMeter .fill{
+    width:100%; height:100%; border-radius:999px;
+    background:linear-gradient(180deg,#ff8a4a 0%,#f2d3a0 9%,#d9dde4 34%,#aeb4bf 100%);
+    box-shadow:0 0 14px rgba(255,140,74,.5);
+    transition:height .18s linear;
+  }
+  #lifeMeter .pct{ font-size:12px; letter-spacing:.06em; color:var(--ink); font-variant-numeric:tabular-nums;
+    text-shadow:0 1px 6px rgba(0,0,0,.8); }
+  #lifeMeter .cap{ font-size:9px; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-faint); }
+
+
+  /* ---- Loadout / smoke selection ---- */
+  /* the dock only appears once you're actually in the room (not intro / not loadout) */
+  #dock{ opacity:0; visibility:hidden; }
+  body.in-room #dock{ opacity:1; visibility:visible; }
+  #pickbar{
+    position:fixed; top:0; left:0; right:0; z-index:6; pointer-events:none;
+    display:flex; flex-direction:column; align-items:center; gap:6px;
+    padding-top:clamp(22px,9vh,80px); text-align:center; opacity:0;
+    transform:translateY(38px); transition:opacity .8s ease, transform .8s cubic-bezier(.2,.7,.2,1);
+  }
+  body.selecting #pickbar{ opacity:1; transform:none; }
+  /* staggered reveal of the loadout header, once the lineup slides up */
+  body.selecting #pickbar h2{ animation:revUp .9s cubic-bezier(.2,.7,.2,1) .2s both; }
+  body.selecting #pickbar p{ animation:revUp .9s cubic-bezier(.2,.7,.2,1) .42s both; }
+  @keyframes revUp{ from{ opacity:0; transform:translateY(22px); filter:blur(6px); } to{ opacity:1; transform:none; filter:blur(0); } }
+  #pickbar h2{
+    margin:0; font-family:var(--font-display); font-style:italic; font-weight:400;
+    font-size:clamp(26px,4.2vw,42px); color:var(--ink); letter-spacing:-.005em;
+  }
+  #pickbar p{
+    margin:4px 0 0; font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    background:var(--glass); border:1px solid var(--glass-brd); box-shadow:var(--glass-sh);
+    backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur);
+    padding:7px 16px; border-radius:999px;
+  }
+  #pickLabels{ position:fixed; inset:0; z-index:6; pointer-events:none; }
+  .pick-label{
+    position:absolute; transform:translate(-50%,0); text-align:center; pointer-events:auto;
+    cursor:pointer; display:flex; flex-direction:column; gap:2px; opacity:.55;
+    transition:opacity .25s; white-space:nowrap;
+    animation:labelUp .7s cubic-bezier(.2,.7,.2,1) both; /* slide up (staggered via inline delay) */
+  }
+  @keyframes labelUp{ from{ translate:0 28px; } to{ translate:0 0; } }
+  .pick-label b{ font-family:var(--font-display); font-size:19px; letter-spacing:.005em; color:var(--ink); font-weight:450; font-style:italic; }
+  .pick-label span{ font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim); font-weight:500; }
+  .pick-label.on{ opacity:1; }
+  .pick-label.on b{ color:var(--ember-glow); }
+  #fade{ position:fixed; inset:0; z-index:15; background:#050607; opacity:0; pointer-events:none;
+    transition:opacity .45s ease; }
+  #fade.on{ opacity:1; }
+  #vignette{position:fixed; inset:0; pointer-events:none; z-index:3;
+    background:radial-gradient(120% 100% at 50% 45%, transparent 55%, rgba(0,0,0,.55) 100%);}
+
+  /* ==========================================================================
+     MOBILE — single-item carousel to pick, and a minimal room where every
+     control folds into one button so the cigarette owns the screen.
+     ========================================================================== */
+  #mobileBar, #menuFab, #scrim, #mobileSelect, #dragHint{ display:none; }
+
+  @media (max-width:640px){
+    /* messages: wrap to the narrow screen and sit above the scene so they always read */
+    #msgs{ z-index:9; }
+    .fmsg{ white-space:normal; max-width:74vw; text-align:center; line-height:1.28; }
+
+    /* compact status line */
+    #hud{ padding:10px 12px; }
+    #hud .wm{ font-size:13px; padding:7px 12px; }
+    #hud .right{ font-size:10px; padding:7px 11px; line-height:1.55; letter-spacing:.1em; }
+
+    /* ---------- Selection: one item, swipe to browse ---------- */
+    #pickbar{ padding-top:calc(84px + env(safe-area-inset-top)); }  /* clear the HUD */
+    #pickbar h2{ font-size:24px; }
+    #pickbar p{ display:none; }        /* the hint lives in the carousel card */
+    #pickLabels{ display:none; }       /* per-pedestal labels off on mobile */
+
+    body.selecting #mobileSelect{
+      display:flex; flex-direction:column; align-items:center; gap:16px;
+      position:fixed; left:0; right:0; z-index:7; pointer-events:none;
+      bottom:calc(34px + env(safe-area-inset-bottom));
+    }
+    #mobileSelect .info{ display:flex; flex-direction:column; align-items:center; gap:5px;
+      transition:opacity .2s ease; }
+    #mobileSelect .name{
+      font-family:var(--font-display); font-style:italic; font-weight:450;
+      font-size:32px; color:var(--ember-glow); letter-spacing:.01em;
+      text-shadow:0 2px 20px rgba(0,0,0,.6);
+    }
+    #mobileSelect .note{ font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-dim); }
+    #mobileSelect .dots{ display:flex; gap:9px; }
+    #mobileSelect .dots .d{ width:7px; height:7px; border-radius:50%; background:rgba(255,255,255,.22);
+      pointer-events:auto; cursor:pointer; transition:background .25s, transform .25s; }
+    #mobileSelect .dots .d.on{ background:var(--ember-glow); transform:scale(1.4); }
+    #mobileSelect .swipe{ font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); }
+    #mobileSelect .light{
+      pointer-events:auto; cursor:pointer; font-family:inherit; color:#191c20; font-weight:600; border:0;
+      padding:15px 46px; border-radius:999px; font-size:14px; letter-spacing:.14em; text-transform:uppercase;
+      background:linear-gradient(180deg, var(--ember-glow), var(--ember));
+      box-shadow:0 10px 28px rgba(150,160,175,.42), inset 0 1px 0 rgba(255,255,255,.6);
+      transition:transform .12s ease, filter .2s ease;
+    }
+    #mobileSelect .light:active{ transform:translateY(1px); filter:brightness(1.05); }
+    #mobileSelect .chev{
+      position:fixed; top:50%; transform:translateY(-50%); z-index:7; pointer-events:auto; cursor:pointer;
+      width:46px; height:46px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+      background:var(--glass); border:1px solid var(--glass-brd); box-shadow:var(--glass-sh);
+      backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur);
+      color:var(--ink); font-size:24px; line-height:1; padding-bottom:3px;
+    }
+    #mobileSelect .chev.l{ left:12px; } #mobileSelect .chev.r{ right:12px; }
+    #mobileSelect .chev:active{ background:var(--glass-strong); }
+
+    /* ---------- Room: a slim front bar (settings + chat), rest in the sheet ---------- */
+    body.in-room #mobileBar{
+      display:flex; align-items:center; gap:10px;
+      position:fixed; left:0; right:0; z-index:11; pointer-events:none;
+      bottom:calc(14px + env(safe-area-inset-bottom)); padding:0 14px;
+    }
+    body.in-room.sheet-open #mobileBar{ display:none; } /* the sheet takes over */
+    #menuFab{
+      display:flex; flex:0 0 auto; width:52px; height:52px; border-radius:50%;
+      align-items:center; justify-content:center;
+      background:var(--glass-strong); border:1px solid var(--glass-brd); box-shadow:var(--glass-sh);
+      backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur);
+      color:var(--ink); cursor:pointer; pointer-events:auto; transition:transform .15s ease, background .2s ease;
+    }
+    #menuFab:active{ transform:scale(.93); }
+    #menuFab svg{ width:23px; height:23px; }
+    #mobileBar #say{ flex:1 1 auto; width:auto; min-width:0; }  /* shrink to keep the right margin */
+    #mobileBar #say input{ font-size:16px; min-width:0; }        /* 16px avoids iOS zoom-on-focus */
+
+    #scrim{
+      position:fixed; inset:0; z-index:12; background:rgba(4,5,7,.5); opacity:0;
+      pointer-events:none; transition:opacity .3s ease;
+    }
+    body.sheet-open #scrim{ display:block; opacity:1; pointer-events:auto; }
+
+    /* the dock itself becomes a bottom sheet the button reveals */
+    body.in-room #dock{
+      left:0; right:0; bottom:0; top:auto; z-index:13;
+      flex-direction:column; align-items:stretch; gap:14px;
+      padding:14px 18px calc(20px + env(safe-area-inset-bottom));
+      background:linear-gradient(180deg, rgba(22,24,29,.82), rgba(11,12,16,.94));
+      border-top:1px solid var(--glass-brd); border-radius:22px 22px 0 0;
+      box-shadow:0 -20px 54px rgba(0,0,0,.55);
+      backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur);
+      opacity:1; visibility:visible;
+      transform:translateY(112%); transition:transform .4s cubic-bezier(.2,.8,.2,1);
+    }
+    body.in-room.sheet-open #dock{ transform:translateY(0); }
+    #dock::before{ content:""; width:42px; height:4px; border-radius:2px; align-self:center;
+      background:rgba(255,255,255,.3); margin-bottom:2px; }
+    #dock #backBtn{ align-self:flex-start; font-size:13px; padding:11px 16px; }
+    #dock #puffHint{ text-align:center; max-width:none; padding:0; }
+    #dock #styles{ justify-content:center; gap:9px; }
+    #dock #styles .style-chip{ padding:11px 17px; font-size:13px; }
+    #dock #tray{ justify-content:center; }
+
+    /* brief onboarding hint when you first drop into the room */
+    #dragHint{
+      position:fixed; left:50%; transform:translateX(-50%); z-index:8; pointer-events:none;
+      bottom:calc(84px + env(safe-area-inset-bottom)); white-space:nowrap;  /* above the front bar */
+      font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink);
+      text-shadow:0 1px 10px rgba(0,0,0,.9), 0 0 3px rgba(0,0,0,.8);
+      padding:11px 20px; opacity:0; transition:opacity .5s ease;
+    }
+    body.in-room.hint-on #dragHint{ display:block; opacity:1; }
+
+    /* life meter: thin strip on the right edge, out of the cigarette's way */
+    #lifeMeter{ right:10px; gap:6px; }
+    #lifeMeter .track{ width:6px; height:32vh; }
+    #lifeMeter .pct{ font-size:10px; }
+    #lifeMeter .cap{ display:none; }
+  }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "/vendor/three.module.js",
+    "three/addons/": "/vendor/addons/"
+  }
+}
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="vignette"></div>
+<div id="smokeFX" aria-hidden="true">
+  <svg viewBox="0 0 100 60" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <filter id="smk" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
+        <feTurbulence type="fractalNoise" baseFrequency="0.028 0.055" numOctaves="4" seed="7" stitchTiles="stitch" result="n"/>
+        <feColorMatrix in="n" type="matrix"
+          values="0 0 0 0 1
+                  0 0 0 0 1
+                  0 0 0 0 1
+                  0.9 0 0 0 -0.34"/>
+        <feComponentTransfer><feFuncA type="gamma" amplitude="1.25" exponent="1.5" offset="0"/></feComponentTransfer>
+        <feGaussianBlur stdDeviation="0.5"/>
+      </filter>
+      <linearGradient id="smkFade" x1="0" y1="1" x2="0" y2="0">
+        <stop offset="0" stop-color="#fff" stop-opacity="1"/>
+        <stop offset="0.45" stop-color="#fff" stop-opacity="0.7"/>
+        <stop offset="0.85" stop-color="#fff" stop-opacity="0.12"/>
+        <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+      </linearGradient>
+      <mask id="smkMask"><rect x="-20" y="-20" width="140" height="100" fill="url(#smkFade)"/></mask>
+    </defs>
+    <g mask="url(#smkMask)">
+      <rect x="-20" y="-20" width="140" height="100" filter="url(#smk)" fill="#dfe4ec"/>
+    </g>
+  </svg>
+</div>
+<div id="msgs"></div>
+<div id="pickLabels"></div>
+<div id="pickbar">
+  <h2>Pick your smoke</h2>
+  <p>hover to inspect · click to light up</p>
+</div>
+<div id="fade"></div>
+
+<div id="hud">
+  <button class="wm" id="brand" type="button" title="Back to the main page">The Smoking Area</button>
+  <div class="right">
+    <div id="count"><b>1</b> here</div>
+    <div id="handle">…</div>
+  </div>
+</div>
+
+<div id="dock">
+  <button id="backBtn" type="button">← change smoke</button>
+  <div id="puffHint"></div>
+  <div id="styles"></div>
+  <div id="tray"></div>
+  <form id="say" autocomplete="off">
+    <input id="msg" maxlength="140" placeholder="say something into the smoke, nobody knows it's you…" />
+    <button type="submit" id="sendBtn" disabled>Exhale</button>
+  </form>
+</div>
+
+<!-- mobile: front bar (settings button + chat input); the rest lives in the sheet -->
+<div id="mobileBar">
+  <button id="menuFab" type="button" aria-label="Controls">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <circle cx="7" cy="7" r="2.4"/><line x1="11" y1="7" x2="20" y2="7"/>
+      <circle cx="16" cy="17" r="2.4"/><line x1="4" y1="17" x2="12" y2="17"/>
+    </svg>
+  </button>
+  <!-- #say is moved in here on mobile (see placeSay) -->
+</div>
+<div id="scrim"></div>
+<div id="dragHint">Hold anywhere to take a drag</div>
+
+<!-- mobile: one-item carousel to pick a smoke -->
+<div id="mobileSelect">
+  <button class="chev l" type="button" aria-label="Previous smoke">‹</button>
+  <button class="chev r" type="button" aria-label="Next smoke">›</button>
+  <div class="info">
+    <div class="name">Cigarette</div>
+    <div class="note">clean grey</div>
+  </div>
+  <div class="dots"></div>
+  <div class="swipe">swipe or tap ‹ › to browse</div>
+  <button class="light" type="button">Light up</button>
+</div>
+
+<div id="lifeMeter" aria-hidden="true">
+  <div class="pct" id="lifePct">100%</div>
+  <div class="track"><div class="fill" id="lifeFill"></div></div>
+  <div class="cap">left</div>
+</div>
+
+<div id="enter">
+  <div class="fine">anonymous · nobody knows your name</div>
+  <h1>Step into the <span class="glow">smoking area</span></h1>
+  <p>Pick a smoke, take a drag, watch it burn down. Whatever you exhale drifts off to strangers. Say what you want. You're no one here.</p>
+  <button id="enterBtn">Step inside</button>
+  <div class="fine" id="whoami">finding you a corner…</div>
+</div>
+
+<!-- Keep the primary transition alive even if an optional WebGL/module asset
+     fails to load. The full module below replaces this with the 3D showcase
+     when available, but the intro must never leave the user stuck. -->
+<script>
+  (() => {
+    const enter = document.getElementById("enter");
+    const button = document.getElementById("enterBtn");
+    if (!enter || !button) return;
+    button.addEventListener("click", () => {
+      enter.classList.add("gone");
+      document.body.classList.add("selecting");
+      document.body.classList.remove("in-room");
+      const pickbar = document.getElementById("pickbar");
+      if (pickbar) {
+        pickbar.style.opacity = "1";
+        pickbar.style.transform = "none";
+      }
+    }, { once: true });
+  })();
+</script>
+
+<script type="module">
+// ============================================================================
+//  The Smoking Area — 3D client (three.js)
+// ============================================================================
+import * as THREE from "three";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+
+// ---- Cigarette kinds -------------------------------------------------------
+const KINDS = {
+  regular: { label: "Cigarette", note: "clean grey", color: "#e9e6df", burnMs: 95000,
+    len: 1.0, radius: 0.035, tint: 0xd8dade, paper: 0xece9e2, rate: 0.9, rise: 1.0, spread: 1.0, density: 1.0 },
+  menthol: { label: "Menthol", note: "cool haze", color: "#9fe8d6", burnMs: 95000,
+    len: 1.0, radius: 0.035, tint: 0xa8ddd2, paper: 0xe4efe9, rate: 0.9, rise: 1.05, spread: 1.15, density: 1.0 },
+  cigar: { label: "Cigar", note: "thick & slow", color: "#c79a63", burnMs: 260000,
+    len: 1.25, radius: 0.075, tint: 0xbfa285, paper: 0x8a6238, rate: 0.55, rise: 0.7, spread: 0.85, density: 1.3 },
+  vape: { label: "Vape", note: "big clouds", color: "#c9a0ff", burnMs: 70000,
+    len: 0.7, radius: 0.055, tint: 0xd5c2ef, paper: 0x2a2b31, rate: 1.1, rise: 1.15, spread: 1.5, density: 1.6 },
+  joint: { label: "Joint", note: "slow drift", color: "#bcd98a", burnMs: 130000,
+    len: 0.85, radius: 0.042, tint: 0xc3d3a3, paper: 0xd9cfae, rate: 0.8, rise: 0.85, spread: 1.3, density: 1.15 },
+};
+
+// ---- Renderer / scene ------------------------------------------------------
+const canvas = document.getElementById("c");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+renderer.localClippingEnabled = true;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.85;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x060708);
+scene.fog = new THREE.FogExp2(0x07080c, 0.026);
+
+const camera = new THREE.PerspectiveCamera(58, 1, 0.05, 120);
+camera.position.set(0, 1.62, 0);
+scene.add(camera); // camera must be in the graph so your held cigarette renders
+let camT = 0; // 0..1 enter settle progress
+
+// ---- Post: bloom -----------------------------------------------------------
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.45, 0.4, 0.86);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h, false);
+  composer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener("resize", resize);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) resize(); });
+resize();
+
+// ---- Environment -----------------------------------------------------------
+scene.add(new THREE.HemisphereLight(0x4a5578, 0x242018, 2.6));
+scene.add(new THREE.AmbientLight(0x363d50, 1.5));
+
+// overhead cold spot — gives the room shape
+const overhead = new THREE.SpotLight(0x9fb4d8, 90, 50, Math.PI / 2.6, 1.0, 1.4);
+overhead.position.set(0, 12, -1);
+overhead.target.position.set(0, 0, -3);
+scene.add(overhead, overhead.target);
+
+// floor — slightly rough concrete that catches the ember pools
+const floorMat = new THREE.MeshStandardMaterial({ color: 0x111318, roughness: 0.72, metalness: 0.25 });
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(90, 60), floorMat);
+floor.rotation.x = -Math.PI / 2;
+scene.add(floor);
+
+// back wall, barely there
+const wall = new THREE.Mesh(
+  new THREE.PlaneGeometry(90, 30),
+  new THREE.MeshStandardMaterial({ color: 0x0b0c10, roughness: 0.95 })
+);
+wall.position.set(0, 15, -12);
+scene.add(wall);
+
+// hanging bare bulbs — tiny hot points high up (bloom catches them)
+const bulbGeo = new THREE.SphereGeometry(0.05, 8, 8);
+for (const [bx, bz] of [[-5, -5], [0, -3.5], [5, -5]]) {
+  const bulb = new THREE.Mesh(bulbGeo, new THREE.MeshBasicMaterial({ color: 0xffd9a0 }));
+  bulb.position.set(bx, 4.6, bz);
+  scene.add(bulb);
+  const bl = new THREE.PointLight(0xffc27a, 14, 16, 1.8);
+  bl.position.set(bx, 4.4, bz);
+  scene.add(bl);
+  const wire = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.006, 0.006, 8, 4),
+    new THREE.MeshBasicMaterial({ color: 0x1a1b20 })
+  );
+  wire.position.set(bx, 8.6, bz);
+  scene.add(wire);
+}
+// a bare ceiling plane so the bulbs hang from something
+const ceiling = new THREE.Mesh(
+  new THREE.PlaneGeometry(90, 60),
+  new THREE.MeshStandardMaterial({ color: 0x08090c, roughness: 1 })
+);
+ceiling.rotation.x = Math.PI / 2; ceiling.position.y = 8.6;
+scene.add(ceiling);
+
+// ---- Textures (procedural) -------------------------------------------------
+function smokeTexture() {
+  // fractal puff: many soft blobs, brighter core, ragged edge
+  const s = 256, cv = document.createElement("canvas");
+  cv.width = cv.height = s;
+  const g = cv.getContext("2d");
+  g.clearRect(0, 0, s, s);
+  const blobs = 46;
+  for (let i = 0; i < blobs; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const r = Math.pow(Math.random(), 1.6) * s * 0.30;
+    const x = s / 2 + Math.cos(a) * r, y = s / 2 + Math.sin(a) * r;
+    const br = s * (0.05 + Math.random() * 0.16);
+    const alpha = 0.12 + Math.random() * 0.18;
+    const grad = g.createRadialGradient(x, y, 0, x, y, br);
+    grad.addColorStop(0, `rgba(255,255,255,${alpha})`);
+    grad.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = grad;
+    g.fillRect(0, 0, s, s);
+  }
+  // soft global falloff so edges never square off
+  const mask = g.createRadialGradient(s/2, s/2, s*0.1, s/2, s/2, s*0.5);
+  mask.addColorStop(0, "rgba(255,255,255,1)");
+  mask.addColorStop(1, "rgba(255,255,255,0)");
+  g.globalCompositeOperation = "destination-in";
+  g.fillStyle = mask; g.fillRect(0, 0, s, s);
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const smokeTex = smokeTexture();
+
+function glowTexture() {
+  const s = 128, cv = document.createElement("canvas");
+  cv.width = cv.height = s;
+  const g = cv.getContext("2d");
+  const grad = g.createRadialGradient(s/2, s/2, 0, s/2, s/2, s/2);
+  grad.addColorStop(0, "rgba(255,255,255,1)");
+  grad.addColorStop(0.25, "rgba(255,255,255,.45)");
+  grad.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = grad; g.fillRect(0, 0, s, s);
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const glowTex = glowTexture();
+
+// ============================================================================
+//  Smoke — custom point-sprite particle system
+// ============================================================================
+const MAX = 4200;
+const pGeo = new THREE.BufferGeometry();
+const pPos = new Float32Array(MAX * 3);
+const pSize = new Float32Array(MAX);
+const pAlpha = new Float32Array(MAX);
+const pAngle = new Float32Array(MAX);
+const pCol = new Float32Array(MAX * 3);
+pGeo.setAttribute("position", new THREE.BufferAttribute(pPos, 3));
+pGeo.setAttribute("aSize", new THREE.BufferAttribute(pSize, 1));
+pGeo.setAttribute("aAlpha", new THREE.BufferAttribute(pAlpha, 1));
+pGeo.setAttribute("aAngle", new THREE.BufferAttribute(pAngle, 1));
+pGeo.setAttribute("aColor", new THREE.BufferAttribute(pCol, 3));
+
+const pMat = new THREE.ShaderMaterial({
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.NormalBlending,
+  uniforms: {
+    uTex: { value: smokeTex },
+    uScale: { value: 1 },
+    uFogColor: { value: new THREE.Color(0x07080c) },
+    uFogDensity: { value: 0.026 },
+  },
+  vertexShader: /* glsl */`
+    attribute float aSize; attribute float aAlpha; attribute float aAngle;
+    attribute vec3 aColor;
+    varying float vAlpha; varying float vAngle; varying vec3 vColor;
+    varying float vFogDepth;
+    uniform float uScale;
+    void main() {
+      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      gl_Position = projectionMatrix * mv;
+      // clamp the near-plane blow-up: smoke right in front of the lens shouldn't fill the screen
+      gl_PointSize = min(aSize * uScale / max(0.7, -mv.z), 260.0);
+      vAlpha = aAlpha; vAngle = aAngle; vColor = aColor;
+      vFogDepth = -mv.z;
+    }`,
+  fragmentShader: /* glsl */`
+    uniform sampler2D uTex;
+    uniform vec3 uFogColor; uniform float uFogDensity;
+    varying float vAlpha; varying float vAngle; varying vec3 vColor;
+    varying float vFogDepth;
+    void main() {
+      vec2 uv = gl_PointCoord - 0.5;
+      float c = cos(vAngle), s = sin(vAngle);
+      uv = vec2(uv.x * c - uv.y * s, uv.x * s + uv.y * c) + 0.5;
+      vec4 tex = texture2D(uTex, uv);
+      float fog = 1.0 - exp(-uFogDensity * uFogDensity * vFogDepth * vFogDepth);
+      vec3 col = mix(vColor, uFogColor, fog);
+      gl_FragColor = vec4(col, tex.a * vAlpha);
+      if (gl_FragColor.a < 0.003) discard;
+    }`,
+});
+const points = new THREE.Points(pGeo, pMat);
+points.frustumCulled = false;
+scene.add(points);
+
+// particle bookkeeping
+const parts = []; // {i, x,y,z, vx,vy,vz, life, decay, size, grow, spin, baseA, tint:THREE.Color, warm}
+const free = [];
+for (let i = MAX - 1; i >= 0; i--) free.push(i);
+const EMBER_WARM = new THREE.Color(1.0, 0.55, 0.28);
+const tmpCol = new THREE.Color();
+
+function spawn(o) {
+  if (!free.length) return null;
+  const i = free.pop();
+  const p = Object.assign({
+    i, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0,
+    life: 1, decay: 0.06, age: 0,
+    size: 0.1, grow: 0.2, spin: (Math.random() - 0.5) * 0.6,
+    angle: Math.random() * Math.PI * 2, baseA: 0.5,
+    tr: 0.8, tg: 0.8, tb: 0.8, warm: 0, seed: Math.random() * 100,
+    turb: 1, // turbulence susceptibility (shapes use less, to hold form)
+  }, o);
+  parts.push(p);
+  return p;
+}
+
+// A thin, natural plume: few particles, small, laminar at birth.
+function emitSmoke(pos, kindId, intensity, opts = {}) {
+  const k = KINDS[kindId] || KINDS.regular;
+  const n = Math.max(1, Math.round((1 + intensity * 6) * k.density * (opts.mult || 1)));
+  const warm = kindId === "vape" ? 0 : 1; // vapor isn't ember-lit
+  tmpCol.setHex(k.tint);
+  for (let q = 0; q < n; q++) {
+    const a = Math.random() * Math.PI * 2;
+    const rr = Math.random() * 0.006;
+    const sp = (0.01 + Math.random() * 0.03) * (0.4 + intensity) * k.spread;
+    spawn({
+      x: pos.x + Math.cos(a) * rr, y: pos.y + Math.random() * 0.01, z: pos.z + Math.sin(a) * rr,
+      vx: Math.cos(a) * sp, vz: Math.sin(a) * sp + intensity * 0.02,
+      vy: (0.045 + Math.random() * 0.05) * k.rise * (0.6 + intensity * 0.55),
+      decay: 0.12 + Math.random() * 0.07,
+      size: 0.005 + Math.random() * 0.006 + intensity * 0.01,
+      grow: (0.01 + Math.random() * 0.014) * (0.8 + intensity * 0.4),
+      baseA: 0.06 + Math.random() * 0.045,
+      tr: tmpCol.r, tg: tmpCol.g, tb: tmpCol.b,
+      warm,
+    });
+  }
+}
+
+// ---- Shaped exhales: ring / heart / spiral ---------------------------------
+// Shapes are built in a local frame (R = right, U = up, F = forward) so they can be
+// blown in any direction: from your mouth into the room, or from a stranger toward you.
+const _R = new THREE.Vector3(), _U = new THREE.Vector3(0, 1, 0), _F = new THREE.Vector3();
+const _WORLD_UP = new THREE.Vector3(0, 1, 0);
+function emitShape(pos, kindId, style, intensity, fwd) {
+  const k = KINDS[kindId] || KINDS.regular;
+  tmpCol.setHex(k.tint);
+  const boost = 0.7 + intensity * 0.5;
+  const warmK = kindId === "vape" ? 0 : 1; // vapor isn't ember-lit
+  // frame
+  if (fwd) _F.copy(fwd); else _F.set(0, 0, 1);
+  _F.normalize();
+  _R.crossVectors(_F, _WORLD_UP).normalize();
+  if (_R.lengthSq() < 1e-6) _R.set(1, 0, 0);
+  _U.crossVectors(_R, _F).normalize();
+  const put = (r, u, f, vr, vu, vf, extra) => { if (extra && "warm" in extra) extra.warm *= warmK; return spawn(Object.assign({
+    x: pos.x + _R.x * r + _U.x * u + _F.x * f,
+    y: pos.y + _R.y * r + _U.y * u + _F.y * f,
+    z: pos.z + _R.z * r + _U.z * u + _F.z * f,
+    vx: _R.x * vr + _U.x * vu + _F.x * vf,
+    vy: _R.y * vr + _U.y * vu + _F.y * vf,
+    vz: _R.z * vr + _U.z * vu + _F.z * vf,
+  }, extra)); };
+
+  // Everything here is deliberately slow and quiet — smoke lifts, it doesn't shoot.
+  if (style === "ring") {
+    // starts as a tight little ring at the tip and slowly opens as it drifts off
+    const N = 64, r0 = 0.018;
+    for (let q = 0; q < N; q++) {
+      const a = (q / N) * Math.PI * 2;
+      const j1 = (Math.random() - 0.5) * 0.002, j2 = (Math.random() - 0.5) * 0.002;
+      put(Math.cos(a) * r0 + j1, Math.sin(a) * r0 + j2, 0.03,
+          Math.cos(a) * 0.028 * boost, Math.sin(a) * 0.028 * boost, 0.14 * boost, {
+        decay: 0.055, size: 0.011, grow: 0.014, turb: 0.1, baseA: 0.3, spin: 0,
+        tr: tmpCol.r, tg: tmpCol.g, tb: tmpCol.b, warm: 0.3,
+      });
+    }
+  } else if (style === "spiral") {
+    const N = 90;
+    for (let q = 0; q < N; q++) {
+      const f = q / N, a = f * Math.PI * 5;
+      const r = 0.008 + f * 0.022;
+      put(Math.cos(a) * r, Math.sin(a) * r * 0.6 + f * 0.02, 0.02 + f * 0.18,
+          -Math.sin(a) * 0.04, Math.cos(a) * 0.025 + 0.015, 0.1 * boost, {
+        decay: 0.06, size: 0.009 + f * 0.005, grow: 0.014, turb: 0.2, baseA: 0.28,
+        tr: tmpCol.r, tg: tmpCol.g, tb: tmpCol.b, warm: 0.5,
+      });
+    }
+  } else {
+    // plain exhale: a soft breath released off the tip. Longer drag (higher
+    // intensity) → more, bigger, wider particles → a fuller cloud.
+    const n = Math.round((5 + intensity * 16) * k.density);
+    const spread = 0.008 + intensity * 0.02;
+    for (let q = 0; q < n; q++) {
+      const a = Math.random() * Math.PI * 2, rr = Math.random() * spread;
+      put(Math.cos(a) * rr, Math.sin(a) * rr * 0.6, 0.01 + Math.random() * 0.02,
+          Math.cos(a) * (0.02 + intensity * 0.03), Math.sin(a) * 0.012 + 0.02 + Math.random() * 0.02,
+          (0.08 + Math.random() * 0.08) * boost, {
+        decay: 0.045 + Math.random() * 0.03, size: 0.009 + Math.random() * 0.012 + intensity * 0.02,
+        grow: 0.028 + Math.random() * 0.03 + intensity * 0.01, baseA: 0.16 + Math.random() * 0.08, turb: 0.8,
+        tr: tmpCol.r, tg: tmpCol.g, tb: tmpCol.b, warm: 0.3,
+      });
+    }
+  }
+}
+
+// atmospheric dust motes
+{
+  const N = 260;
+  const g = new THREE.BufferGeometry();
+  const arr = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    arr[i*3] = (Math.random() - 0.5) * 18;
+    arr[i*3+1] = Math.random() * 5;
+    arr[i*3+2] = (Math.random() - 0.5) * 16 - 3;
+  }
+  g.setAttribute("position", new THREE.BufferAttribute(arr, 3));
+  const m = new THREE.PointsMaterial({
+    map: glowTex, size: 0.05, transparent: true, opacity: 0.35,
+    color: 0xaab6cc, blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
+  });
+  const dust = new THREE.Points(g, m);
+  dust.frustumCulled = false;
+  scene.add(dust);
+  dust.userData.tick = (t) => { dust.rotation.y = t * 0.008; };
+  window.__dust = dust;
+}
+
+// ============================================================================
+//  Per-kind GLB models — normalized so the smoke runs along +Y, mouth end at
+//  y=0, length 1. Each template stores userData.tipLocal (where smoke spawns).
+// ============================================================================
+const MODEL_URLS = {
+  cigar: "/models/cigar.glb",
+  joint: "/models/joint.glb",
+  menthol: "/models/menthol.glb",
+  vape: "/models/vape.glb",
+  regular: "/cigarette.glb", // optional; procedural fallback until provided
+};
+const kindModels = {}; // kindId -> normalized template Group
+
+function normalizeModel(root, kindId) {
+  const wrap = new THREE.Group();
+  wrap.add(root);
+  // longest axis → +Y
+  const box = new THREE.Box3().setFromObject(root);
+  const size = new THREE.Vector3(); box.getSize(size);
+  const axes = [size.x, size.y, size.z];
+  const longest = axes.indexOf(Math.max(...axes));
+  if (longest === 0) root.rotation.z = Math.PI / 2;
+  else if (longest === 2) root.rotation.x = -Math.PI / 2;
+  root.scale.setScalar(1 / (axes[longest] || 1));
+  const recenter = () => {
+    const b = new THREE.Box3().setFromObject(wrap);
+    const c = new THREE.Vector3(); b.getCenter(c);
+    root.position.x -= c.x; root.position.z -= c.z; root.position.y -= b.min.y;
+  };
+  recenter();
+  wrap.updateWorldMatrix(true, true);
+
+  // Orient using authored landmarks: the "ember" meshes belong at the top
+  // (that's the burning end); a vape's "mouthpiece" belongs at the bottom.
+  const landmarkY = (test) => {
+    const b = new THREE.Box3(); let found = false;
+    root.traverse((o) => {
+      if (o.isMesh && test((o.material?.name || "").toLowerCase())) { b.expandByObject(o); found = true; }
+    });
+    if (!found) return null;
+    const c = new THREE.Vector3(); b.getCenter(c);
+    return c.y;
+  };
+  const emberY = landmarkY((n) => n.includes("ember") || n.includes("ash"));
+  const mouthY = landmarkY((n) => n.includes("mouthpiece"));
+  let flip = false;
+  if (emberY !== null) flip = emberY < 0.5;       // ember ended up low → flip
+  else if (mouthY !== null) flip = mouthY > 0.5;  // mouthpiece ended up high → flip
+  if (flip) {
+    root.rotateOnWorldAxis(new THREE.Vector3(0, 0, 1), Math.PI);
+    recenter();
+    wrap.updateWorldMatrix(true, true);
+  }
+
+  // smoke anchor: center of the ember meshes (matrices are current post-flip), else the top end
+  const tipY = landmarkY((n) => n.includes("ember")) ?? 0.99;
+  const b = new THREE.Box3().setFromObject(wrap);
+  wrap.userData.tipLocal = new THREE.Vector3(0, Math.max(0.9, Math.min(1, tipY)), 0);
+  wrap.userData.radius = Math.max(b.max.x - b.min.x, b.max.z - b.min.z) / 2;
+  root.traverse((o) => { if (o.isMesh) o.castShadow = false; });
+
+  // Vape: recolor the near-black satin shell to a light matte grey. Keep it matte
+  // (low metalness, high roughness) so it doesn't mirror the light colour — otherwise
+  // it reads white under warm showcase fill but blue under the room's cool sky — and
+  // so it has no sharp specular "shine" streak on hover.
+  if (kindId === "vape") {
+    root.traverse((o) => {
+      if (!o.isMesh) return;
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      for (const m of mats) {
+        const n = (m?.name || "").toLowerCase();
+        if (n.includes("shell") || n.includes("engraving")) {
+          m.color?.setHex(0xcfd2d8);
+          if ("metalness" in m) m.metalness = 0.12;
+          if ("roughness" in m) m.roughness = 0.6;
+        } else if (n.includes("e_liquid")) {
+          m.color?.setHex(0x9ec9d6);           // cool juice, not a burning amber
+        }
+      }
+    });
+  }
+  return wrap;
+}
+
+for (const [kindId, url] of Object.entries(MODEL_URLS)) {
+  new GLTFLoader().load(url, (gltf) => {
+    kindModels[kindId] = normalizeModel(gltf.scene, kindId);
+    // hot-swap for anyone already holding this kind
+    for (const s of smokers.values()) {
+      if (s.kindId === kindId) { const lit = s.lit; s.buildCig(kindId); s.layout(); s.setLit(lit); }
+    }
+    if (mode === "select") openShowcase(); // refresh the lineup with the real model
+  }, undefined, () => {}); // missing model → procedural fallback stays
+}
+
+// ============================================================================
+//  Smokers — 3D cigarettes with lights
+// ============================================================================
+const smokers = new Map(); // id -> Smoker
+const _pa = new THREE.Vector3(), _pn = new THREE.Vector3();
+// how big each smoke sits in your own hand (cigars are chunky, so smaller)
+const HOLD_SCALE = { regular: 0.42, menthol: 0.42, joint: 0.42, cigar: 0.32, vape: 0.46 };
+// Others stand in an arc across the room, facing you. slot 0..1 → angle across the arc.
+const EYE_Y = 1.62;
+function slotToWorld(x01) {
+  const ang = (x01 - 0.5) * 1.3;              // ~ -37° .. +37°
+  const r = 5.2 + Math.abs(x01 - 0.5) * 2.0;  // edges a touch further back
+  return new THREE.Vector3(Math.sin(ang) * r, 0, -Math.cos(ang) * r);
+}
+const slotX = (x) => slotToWorld(x).x;
+
+class Smoker {
+  constructor(id, x01, hue, isYou) {
+    this.id = id; this.isYou = isYou;
+    this.hue = hue;
+    this.kindId = "regular";
+    this.burn = 0; this.lit = false; this.glow = 0;
+    this.bob = Math.random() * Math.PI * 2;
+    this.raise = 0; // 0 = at rest (hand low), 1 = at lips
+    this.group = new THREE.Group();
+
+    if (isYou) {
+      // First person: your hand lives in camera space, low-right of frame.
+      camera.add(this.group);
+      this.group.position.set(0, 0, 0);
+    } else {
+      const wp = slotToWorld(x01);
+      this.group.position.copy(wp);
+      this.group.lookAt(0, 0, 0); // face the viewer
+      scene.add(this.group);
+      // No body: across a dark smoking area you only ever see the other person's
+      // lit cigarette hanging in the black — that's all a stranger is here.
+    }
+
+    // held cigarette assembly, tilted like a hand holding it
+    this.cig = new THREE.Group();
+    if (isYou) {
+      // rest pose in camera space: lower-right, held near the lens (CS viewmodel)
+      this.cig.position.set(0.44, -0.5, -1.12);
+      this.cig.rotation.set(-0.5, -0.42, 0.60);
+      this.cig.scale.setScalar(0.42);
+    } else {
+      this.cig.scale.setScalar(0.34);
+      this.cig.position.set(-0.24, 1.22, 0.14); // their right hand (mirrored, they face us)
+      this.cig.rotation.set(0.35, 0, -0.5);
+    }
+    this.group.add(this.cig);
+
+    // ember point light — pools warm light on the floor
+    this.light = new THREE.PointLight(0xff7a35, 0, isYou ? 3.5 : 6, 2.0);
+    this.light.position.set(0, 1.6, 0.3);
+    this.group.add(this.light);
+
+    // ember glow sprite (bloom feeds on this)
+    this.glowSpr = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: glowTex, color: 0xff8845, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    }));
+    this.glowSpr.scale.setScalar(0.6);
+    this.group.add(this.glowSpr);
+
+    this.buildCig("regular");
+    this.setLit(false);
+  }
+
+  buildCig(kindId) {
+    this.kindId = kindId;
+    const k = KINDS[kindId];
+    // clear previous meshes
+    while (this.cig.children.length) {
+      const c = this.cig.children.pop();
+      c.traverse((o) => { o.geometry?.dispose?.(); if (o !== this.model) o.material?.dispose?.(); });
+    }
+    this.model = null; this.useModel = false; this.emberMats = null;
+    this.burns = kindId !== "vape"; // a vape has no ember — it doesn't burn
+    if (this.isYou) this.cig.scale.setScalar(HOLD_SCALE[kindId] || 0.30);
+    const R = k.radius, L = k.len;
+    const filterH = kindId === "vape" ? 0.0 : 0.22;
+    const tmpl = kindModels[kindId];
+    this.useModel = !!tmpl;
+    if (this.useModel) {
+      // --- authored GLB: it brings its own filter, ash, and ember ---
+      this.model = tmpl.clone(true);
+      this.model.scale.set(L, L, L);
+      this.emberMats = [];
+      // burning kinds get clipped from the burn line up as they're consumed
+      this.clip = this.burns ? new THREE.Plane(new THREE.Vector3(0, -1, 0), L) : null;
+      this.model.traverse((o) => {
+        if (!o.isMesh) return;
+        o.material = o.material.clone(); // per-clone so glow doesn't leak between smokers
+        if (this.clip) { o.material.clippingPlanes = [this.clip]; o.material.clipShadows = true; }
+        const name = (o.material.name || "").toLowerCase();
+        if (name.includes("ember")) {
+          o.material.emissive = new THREE.Color(0xd8380e);
+          o.material.emissiveIntensity = 0;
+          this.emberMats.push(o.material);
+        }
+      });
+      this.cig.add(this.model);
+      this.paperLen = L; this.filterH = 0;
+      const R = (tmpl.userData.radius || 0.045) * L;
+      if (this.burns) {
+        // a charred band + glowing coal that ride the burn line as it shortens
+        this.ash = new THREE.Mesh(
+          new THREE.CylinderGeometry(R * 0.98, R, 0.05 * L, 20),
+          new THREE.MeshStandardMaterial({ color: 0x3a3532, roughness: 1 })
+        );
+        const coalMat = new THREE.MeshStandardMaterial({ color: 0x1a0a05, emissive: 0xd8380e, emissiveIntensity: 0, roughness: 0.95 });
+        this.tip = new THREE.Mesh(new THREE.CylinderGeometry(R * 0.95, R * 0.98, 0.014 * L, 20), coalMat);
+        this.emberMats.push(coalMat); // coal is the ember once the authored one burns away
+        this.cig.add(this.ash, this.tip);
+      } else {
+        // vape: no burn — smoke just anchors at the mouthpiece
+        this.ash = null;
+        this.tip = new THREE.Object3D();
+        this.tip.position.copy(tmpl.userData.tipLocal).multiplyScalar(L);
+        this.cig.add(this.tip);
+      }
+      this.layout();
+      return;
+    }
+    this.clip = null;
+    // filter / mouthpiece
+    if (filterH > 0) {
+      const f = new THREE.Mesh(
+        new THREE.CylinderGeometry(R * 1.02, R * 1.02, filterH, 20),
+        new THREE.MeshStandardMaterial({ color: kindId === "joint" ? 0xcdbf9a : 0xc98d4e, roughness: 0.8 })
+      );
+      f.position.y = filterH / 2;
+      this.cig.add(f);
+    }
+    // paper body (scaled as it burns)
+    this.paper = new THREE.Mesh(
+      new THREE.CylinderGeometry(R, R * (kindId === "cigar" ? 0.9 : 1), L, 20),
+      new THREE.MeshStandardMaterial({ color: k.paper, roughness: 0.65 })
+    );
+    this.paperLen = L; this.filterH = filterH;
+    this.cig.add(this.paper);
+    // A real cigarette just ends: a short charred band, then a flush glowing face.
+    // No protruding sphere or ring — nothing sits "on" the tip.
+    this.ash = new THREE.Mesh(
+      new THREE.CylinderGeometry(R * 0.985, R, 0.045, 20),
+      new THREE.MeshStandardMaterial({ color: 0x3a3532, roughness: 1 })
+    );
+    this.cig.add(this.ash);
+    this.tip = new THREE.Mesh(
+      new THREE.CylinderGeometry(R * 0.96, R * 0.985, 0.012, 20),
+      new THREE.MeshStandardMaterial({
+        color: 0x1a0a05, emissive: 0xd8380e, emissiveIntensity: 0.4, roughness: 0.95,
+      })
+    );
+    this.cig.add(this.tip);
+    this.layout();
+  }
+
+  layout() {
+    if (this.useModel) {
+      if (!this.burns) return;            // vape keeps its full shape
+      const minKeep = 0.3;                // never burn into the filter
+      const keep = Math.max(minKeep, 1 - this.burn * (1 - minKeep));
+      const yCut = this.paperLen * keep;
+      this.cutY = yCut;                    // world-space plane rebuilt each tick
+      if (this.ash) this.ash.position.y = yCut - 0.024 * this.paperLen;
+      if (this.tip) this.tip.position.y = yCut + 0.006 * this.paperLen;
+      return;
+    }
+    const L = this.paperLen * (1 - this.burn);
+    this.paper.scale.y = Math.max(0.02, 1 - this.burn);
+    this.paper.position.y = this.filterH + L / 2;
+    const end = this.filterH + L;
+    this.ash.position.y = end - 0.0225;   // charred band flush with the last few mm of paper
+    this.tip.position.y = end + 0.006;    // glowing face sits exactly on the end
+  }
+
+  tipWorld(v) {
+    if (this.isYou) camera.updateMatrixWorld(true);
+    return this.tip.getWorldPosition(v);
+  }
+
+  setEmber(intensity) {
+    if (this.emberMats) for (const m of this.emberMats) m.emissiveIntensity = intensity;
+    else if (this.tip?.material) this.tip.material.emissiveIntensity = intensity;
+  }
+
+  setLit(lit) {
+    this.lit = lit;
+    this.setEmber(lit && this.burns ? 0.4 : 0.0);
+    if (!lit || !this.burns) { this.light.intensity = 0; this.glowSpr.material.opacity = 0; }
+  }
+
+  tick(dt, t, inhaling) {
+    this.bob += dt * 0.6;
+    if (this.isYou) {
+      // hand raise: rest → lips
+      const target = inhaling ? 1 : 0;
+      this.raise += (target - this.raise) * Math.min(1, dt * (inhaling ? 6 : 3.2));
+      const r = this.raise, e = r * r * (3 - 2 * r);
+      const bx = Math.sin(this.bob) * 0.006, by = Math.cos(this.bob * 0.8) * 0.006;
+      // rest: held low-right at arm's length, tip up-and-away.
+      // lips: rises to just below the lens, close, filter toward the mouth.
+      // rest → active: drift in toward the mouth and zoom closer to the lens
+      this.cig.position.set(
+        0.44 + (0.12 - 0.44) * e + bx,
+        -0.5 + (-0.18 + 0.5) * e + by,
+        -1.12 + (-0.5 + 1.12) * e
+      );
+      this.cig.rotation.set(
+        -0.5 + (-1.12 + 0.5) * e,
+        -0.42 + (-0.20 + 0.42) * e,
+        0.60 + (0.34 - 0.60) * e
+      );
+      // scale up a touch as it comes to the lips — feels like leaning in for a drag
+      const zoom = 1 + 0.28 * e;
+      const base = HOLD_SCALE[this.kindId] || 0.42;
+      this.cig.scale.setScalar(base * zoom);
+    } else {
+      this.cig.position.y = 1.22 + Math.sin(this.bob) * 0.02;
+      this.cig.rotation.z = -0.5 + Math.sin(this.bob * 0.7) * 0.02;
+    }
+    // rebuild the burn-line clip plane in world space (normal = model's local +Y)
+    if (this.useModel && this.clip) {
+      this.cig.updateWorldMatrix(true, false);
+      _pa.set(0, this.cutY ?? this.paperLen, 0).applyMatrix4(this.cig.matrixWorld);
+      _pn.set(0, 1, 0).transformDirection(this.cig.matrixWorld).negate();
+      this.clip.setFromNormalAndCoplanarPoint(_pn, _pa);
+    }
+    this.glow = Math.max(0, this.glow - dt * 1.3);
+    if (this.lit && this.burns) {
+      // slow, subtle breathing of the coal at rest; a real flare only on a drag
+      const flick = 0.92 + Math.sin(t * 2.1 + this.bob * 3) * 0.05 + Math.sin(t * 7.3) * 0.03;
+      const heat = (inhaling ? 1.6 : 0.42) + this.glow * 0.6;
+      this.setEmber(0.75 * heat * flick);
+      this.light.intensity = (this.isYou ? 0.16 : 0.5) * heat * flick;
+      this.tipWorld(this.light.position);
+      this.light.position.y += 0.05;
+      this.group.worldToLocal(this.light.position);
+      this.tipWorld(this.glowSpr.position);
+      this.group.worldToLocal(this.glowSpr.position);
+      const gs = this.isYou ? 0.16 : 0.5;
+      this.glowSpr.material.opacity = this.isYou ? 0 : 0.05 + heat * 0.12;
+      this.glowSpr.scale.setScalar((0.25 + heat * 0.35) * gs);
+    }
+  }
+
+  dispose() {
+    scene.remove(this.group);
+    this.group.traverse((c) => { c.geometry?.dispose(); c.material?.dispose(); });
+  }
+}
+
+// ============================================================================
+//  Your state + networking (same protocol as before)
+// ============================================================================
+const you = { id: null, x: 0.5, hue: 20, name: "…" };
+const cig = { kind: null, burn: 0, lit: false, spent: false, inhaling: false, holdT: 0 };
+
+let ws = null;
+const statusEl = document.getElementById("status");
+const setStatus = (s) => { if (statusEl) statusEl.textContent = s; };
+
+function connect() {
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  ws = new WebSocket(`${proto}://${location.host}`);
+  ws.onopen = () => setStatus("in the lounge");
+  ws.onclose = () => { setStatus("disconnected, retrying…"); setTimeout(connect, 1500); };
+  ws.onerror = () => {};
+  ws.onmessage = (ev) => { let m; try { m = JSON.parse(ev.data); } catch { return; } handle(m); };
+}
+const send = (o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
+
+function getSmoker(id, x01 = 0.5, hue = 20) {
+  if (!smokers.has(id)) {
+    const s = new Smoker(id, x01, hue, id === you.id);
+    if (id === you.id && mode !== "room") s.cig.visible = false; // hidden during selection
+    smokers.set(id, s);
+  }
+  return smokers.get(id);
+}
+
+function handle(m) {
+  switch (m.t) {
+    case "welcome": {
+      you.id = m.id; you.name = m.you.name; you.hue = m.you.hue; you.x = m.you.x;
+      document.getElementById("handle").textContent = m.you.name;
+      document.getElementById("whoami").textContent = "you are " + m.you.name;
+      getSmoker(you.id, you.x, you.hue);
+      for (const r of m.roster) {
+        const s = getSmoker(r.id, r.x, r.hue);
+        if (r.lit) { s.buildCig(r.kind || "regular"); s.setLit(true); s.burn = 0.2; s.layout(); }
+      }
+      setCount(m.count);
+      break;
+    }
+    case "join": getSmoker(m.id, m.x, m.hue); break;
+    case "leave": { smokers.get(m.id)?.dispose(); smokers.delete(m.id); break; }
+    case "count": setCount(m.n); break;
+    case "light": {
+      const s = getSmoker(m.id, m.x);
+      s.buildCig(m.kind in KINDS ? m.kind : "regular");
+      s.burn = 0; s.layout(); s.setLit(true);
+      break;
+    }
+    case "done": { const s = smokers.get(m.id); if (s) s.setLit(false); break; }
+    case "puff": {
+      const s = smokers.get(m.id); if (!s) break;
+      s.glow = Math.min(1.6, s.glow + (m.intensity || 0.5));
+      s.burn = Math.min(0.97, s.burn + 0.015 * (m.intensity || 0.5) * 3); s.layout();
+      // their shape is born at their cigarette tip and lifts up-and-toward you
+      s.tipWorld(_v1);
+      _v2.set(0, EYE_Y, 0).sub(_v1).normalize();
+      _v2.y += 0.55; _v2.normalize();
+      emitShape(_v1, s.kindId, m.style || "puff", m.intensity || 0.5, _v2);
+      break;
+    }
+    case "wind": applyWind(m.x, m.y, m.dx, m.dy); break;
+    case "msg": {
+      const s = smokers.get(m.id);
+      const mine = m.id === you.id;
+      let anchor;
+      if (mine) anchor = new THREE.Vector3(0.15, 1.45, -1.1);
+      else if (s) { anchor = s.group.position.clone(); anchor.y = 1.85; }
+      else { anchor = slotToWorld(m.x ?? 0.5); anchor.y = 1.85; }
+      addMessage(anchor, m.text, m.hue, mine);
+      break;
+    }
+  }
+}
+function setCount(n) {
+  document.getElementById("count").innerHTML =
+    `<b>${n}</b> ${n === 1 ? "here, alone for now" : "here"}`;
+}
+
+// ---- Your cigarette actions ------------------------------------------------
+const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3();
+function lightUp(kindId) {
+  cig.kind = kindId; cig.burn = 0; cig.lit = true; cig.spent = false;
+  const s = getSmoker(you.id, you.x, you.hue);
+  s.buildCig(kindId); s.burn = 0; s.layout(); s.setLit(true);
+  send({ t: "light", kind: kindId });
+  renderTray();
+  setHint("hold anywhere to take a drag, release to exhale");
+}
+let exhaleStyle = "puff";
+const _fwd = new THREE.Vector3();
+function exhale(intensity) {
+  const s = smokers.get(you.id); if (!s) return;
+  s.glow = Math.min(1.6, s.glow + intensity);
+  // Shapes are born right at the cigarette tip and drift up and away from you.
+  s.tipWorld(_v1);
+  camera.getWorldDirection(_fwd);
+  _fwd.y += 0.55; _fwd.normalize();  // up-and-away, like real exhaled smoke lifting
+  emitShape(_v1, cig.kind, exhaleStyle, intensity, _fwd);
+  send({ t: "puff", intensity, style: exhaleStyle });
+}
+
+// ============================================================================
+//  Loadout showcase — a CS-style inspect screen. Each smoke turns on a pedestal
+//  in a lineup high above the room; hover spins one up, click lights it and
+//  drops you into the room holding it.
+// ============================================================================
+let mode = "intro"; // 'intro' | 'select' | 'room'
+const SHOW_Y = 40;        // showcase sits well above the room, isolated
+const PICK_SPACING = 2.4; // gap between pedestals
+const showcase = { group: null, items: [], hover: -1, camIn: 0, active: 0, camX: 0 };
+
+// ---- Mobile flag + one-button controls / carousel wiring -------------------
+const mqMobile = window.matchMedia("(max-width:640px)");
+let isMobile = mqMobile.matches;
+document.body.classList.toggle("mobile", isMobile);
+mqMobile.addEventListener("change", (e) => {
+  isMobile = e.matches;
+  document.body.classList.toggle("mobile", isMobile);
+  if (!isMobile) document.body.classList.remove("sheet-open");
+  placeSay();
+  if (mode === "select") buildMobileDots();
+});
+
+// The chat bar rides at the front beside the settings button on mobile, but
+// sits inside the control dock on desktop — move it to match the layout.
+function placeSay() {
+  const say = document.getElementById("say");
+  const bar = document.getElementById("mobileBar");
+  const dock = document.getElementById("dock");
+  if (say && bar && dock) (isMobile ? bar : dock).appendChild(say);
+}
+placeSay();
+
+let hintTimer = 0;
+const menuFab = document.getElementById("menuFab");
+const scrim = document.getElementById("scrim");
+menuFab.addEventListener("click", () => document.body.classList.toggle("sheet-open"));
+scrim.addEventListener("click", () => document.body.classList.remove("sheet-open"));
+
+const mSelect = document.getElementById("mobileSelect");
+const mName = mSelect.querySelector(".name");
+const mNote = mSelect.querySelector(".note");
+const mDots = mSelect.querySelector(".dots");
+function setActive(i) {
+  const n = showcase.items.length; if (!n) return;
+  showcase.active = ((i % n) + n) % n;
+  const it = showcase.items[showcase.active];
+  mName.textContent = KINDS[it.kind].label;
+  mNote.textContent = KINDS[it.kind].note;
+  [...mDots.children].forEach((d, k) => d.classList.toggle("on", k === showcase.active));
+}
+function cycleActive(dir) { setActive(showcase.active + dir); }
+function buildMobileDots() {
+  mDots.innerHTML = "";
+  showcase.items.forEach((it, i) => {
+    const d = document.createElement("div");
+    d.className = "d" + (i === showcase.active ? " on" : "");
+    d.onclick = () => setActive(i);
+    mDots.appendChild(d);
+  });
+  setActive(showcase.active);
+}
+mSelect.querySelector(".chev.l").addEventListener("click", () => cycleActive(-1));
+mSelect.querySelector(".chev.r").addEventListener("click", () => cycleActive(1));
+mSelect.querySelector(".light").addEventListener("click", () => {
+  const it = showcase.items[showcase.active]; if (it) selectSmoke(it.kind);
+});
+const fadeEl = document.getElementById("fade");
+const pickLabels = document.getElementById("pickLabels");
+const lifeFill = document.getElementById("lifeFill");
+const lifePct = document.getElementById("lifePct");
+
+function buildPreview(kind) {
+  const wrap = new THREE.Group();
+  const tilt = new THREE.Group();
+  tilt.rotation.z = 1.05;   // lay it diagonal so a Y-spin sweeps it around
+  wrap.add(tilt);
+  const tmpl = kindModels[kind];
+  if (tmpl) {
+    const m = tmpl.clone(true);
+    m.position.y = -0.5;    // model spans y 0..1 → centre on origin
+    m.traverse((o) => {
+      if (!o.isMesh) return;
+      o.material = o.material.clone();
+      if ((o.material.name || "").toLowerCase().includes("ember")) {
+        o.material.emissive = new THREE.Color(0xd8380e);
+        o.material.emissiveIntensity = 0.55;
+      }
+    });
+    tilt.add(m);
+  } else {
+    // procedural stand-in (regular cigarette, or any model not yet loaded)
+    const R = 0.05, L = 1, fH = 0.22;
+    const grp = new THREE.Group(); grp.position.y = -0.5;
+    const filt = new THREE.Mesh(new THREE.CylinderGeometry(R * 1.02, R * 1.02, fH, 20),
+      new THREE.MeshStandardMaterial({ color: 0xc98d4e, roughness: 0.8 }));
+    filt.position.y = fH / 2;
+    const paper = new THREE.Mesh(new THREE.CylinderGeometry(R, R, L - fH, 20),
+      new THREE.MeshStandardMaterial({ color: 0xece9e2, roughness: 0.65 }));
+    paper.position.y = fH + (L - fH) / 2;
+    const tip = new THREE.Mesh(new THREE.CylinderGeometry(R * 0.96, R * 0.985, 0.014, 20),
+      new THREE.MeshStandardMaterial({ color: 0x1a0a05, emissive: 0xd8380e, emissiveIntensity: 0.55, roughness: 0.95 }));
+    tip.position.y = L;
+    grp.add(filt, paper, tip); tilt.add(grp);
+  }
+  return wrap;
+}
+
+function teardownShowcase() {
+  if (showcase.group) {
+    scene.remove(showcase.group);
+    showcase.group.traverse((o) => { o.geometry?.dispose?.(); if (o.material && o !== showcase.group) o.material.dispose?.(); });
+  }
+  showcase.group = null; showcase.items = []; showcase.hover = -1;
+  pickLabels.innerHTML = "";
+}
+
+function openShowcase() {
+  mode = "select";
+  document.body.classList.add("selecting");
+  document.body.classList.remove("in-room");
+  const meS = smokers.get(you.id); if (meS) meS.cig.visible = false;
+  teardownShowcase();
+  showcase.group = new THREE.Group();
+  showcase.group.position.set(0, SHOW_Y, 0);
+  scene.add(showcase.group);
+  // even fill across the whole lineup so every product reads clearly (esp. the dark vape)
+  const fillFront = new THREE.PointLight(0xfff1df, 8.5, 26, 1.0); fillFront.position.set(0, 1.0, 5); showcase.group.add(fillFront);
+  const fillL = new THREE.PointLight(0xe6ecff, 5, 26, 1.0); fillL.position.set(-5, 3, 2.5); showcase.group.add(fillL);
+  const fillR = new THREE.PointLight(0xe6ecff, 5, 26, 1.0); fillR.position.set(5, 3, 2.5); showcase.group.add(fillR);
+  const fillTop = new THREE.PointLight(0xfff4e6, 4, 26, 1.0); fillTop.position.set(0, 6, 1); showcase.group.add(fillTop);
+  const kinds = Object.keys(KINDS);
+  const n = kinds.length;
+  kinds.forEach((kind, i) => {
+    const x = (i - (n - 1) / 2) * PICK_SPACING;
+    const wrap = buildPreview(kind);
+    wrap.position.set(x, 0, 0);
+    wrap.scale.setScalar(1.85);
+    wrap.userData.index = i;
+    showcase.group.add(wrap);
+    const light = new THREE.PointLight(0xffe6c8, 0.85, 5, 1.6);
+    light.position.set(x, 1.2, 1.3); // from above-front → soft, even, not a hot spotlight
+    showcase.group.add(light);
+    const el = document.createElement("div");
+    el.className = "pick-label";
+    el.style.animationDelay = (0.34 + i * 0.09) + "s"; // staggered slide-up
+    el.innerHTML = `<b>${KINDS[kind].label}</b><span>${KINDS[kind].note}</span>`;
+    el.onclick = () => selectSmoke(kind);
+    pickLabels.appendChild(el);
+    showcase.items.push({ kind, wrap, light, el, x, spin: Math.random() * 6, sc: 1.85, reveal: 0, delay: 0.18 + i * 0.12 });
+  });
+  showcase.camIn = 0;
+  showcase.t0 = performance.now();
+  // mobile carousel: start on the first smoke, centre the camera there, build dots
+  showcase.active = 0;
+  showcase.camX = showcase.items[0] ? showcase.items[0].x : 0;
+  document.body.classList.remove("sheet-open");
+  buildMobileDots();
+}
+
+function selectSmoke(kind) {
+  if (mode !== "select") return;
+  mode = "room";
+  document.body.classList.remove("selecting");
+  document.body.classList.remove("sheet-open");
+  document.body.classList.add("in-room");
+  fadeEl.classList.add("on");
+  teardownShowcase();
+  const meS = smokers.get(you.id); if (meS) meS.cig.visible = true;
+  entered = true; camT = 0;
+  document.body.style.cursor = "default";
+  lightUp(kind);
+  setTimeout(() => fadeEl.classList.remove("on"), 260);
+  if (isMobile) { // brief "hold to drag" nudge, since controls are hidden
+    document.body.classList.add("hint-on");
+    clearTimeout(hintTimer);
+    hintTimer = setTimeout(() => document.body.classList.remove("hint-on"), 4200);
+  }
+}
+
+// Hover by screen column: each smoke owns a vertical slab of the screen spanning
+// its model AND its label (the gap between counts too), so the whole column is a
+// big, forgiving target. Nearest column within the band wins — no dead zones.
+const _hp = new THREE.Vector3();
+function projY(worldY) { _hp.set(0, worldY, 0).project(camera); return (-_hp.y * 0.5 + 0.5) * window.innerHeight; }
+function projX(worldX) { _hp.set(worldX, SHOW_Y, 0).project(camera); return (_hp.x * 0.5 + 0.5) * window.innerWidth; }
+function updateHover() {
+  if (mode !== "select" || !showcase.items.length) return;
+  const px = (pointerN.x * 0.5 + 0.5) * window.innerWidth;
+  const py = (pointerN.y * 0.5 + 0.5) * window.innerHeight;
+  const topY = projY(SHOW_Y + 1.3) - 40;   // a bit above the models…
+  const botY = projY(SHOW_Y - 1.9) + 46;   // …down past the labels
+  let idx = -1;
+  if (py >= topY && py <= botY) {
+    let best = Infinity;
+    for (let i = 0; i < showcase.items.length; i++) {
+      const d = Math.abs(px - projX(showcase.items[i].x));
+      if (d < best) { best = d; idx = i; }
+    }
+  }
+  showcase.hover = idx;
+}
+
+// Mobile: one smoke centred and large; the camera glides sideways to the active
+// pedestal (revealing its neighbours in passing) as you swipe or tap the arrows.
+function showcaseTickMobile(dt) {
+  const items = showcase.items; if (!items.length) return;
+  const active = items[showcase.active] || items[0];
+  const vFov = camera.fov * Math.PI / 180;
+  const dist = 1.4 / Math.tan(vFov / 2) + 2.6;   // frame one model with margin so it never clips
+  showcase.camIn = Math.min(1, showcase.camIn + dt * 0.9);
+  const e = 1 - Math.pow(1 - showcase.camIn, 3);
+  showcase.camX += (active.x - showcase.camX) * Math.min(1, dt * 7); // smooth slide
+  camera.position.set(showcase.camX, SHOW_Y, dist + (1 - e) * 3);
+  camera.rotation.set(0, 0, 0, "YXZ");
+  camera.lookAt(showcase.camX, SHOW_Y, 0);
+  camera.updateMatrixWorld(true);
+  document.body.style.cursor = "default";
+
+  const elapsed = (performance.now() - (showcase.t0 || 0)) / 1000;
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    const on = i === showcase.active;
+    const rv = Math.max(0, Math.min(1, (elapsed - it.delay) / 0.6));
+    const rvE = rv * rv * (3 - 2 * rv);
+    const tsc = on ? 1.5 : 1.05;                    // active clearly bigger, but fully in-frame
+    it.sc += (tsc - it.sc) * Math.min(1, dt * 9);
+    it.wrap.scale.setScalar(it.sc * rvE);
+    it.wrap.rotation.y += (on ? 2.0 : 0.14) * dt;   // active turns; others idle
+    it.wrap.position.y += ((on ? 0.15 : 0) + (1 - rvE) * -0.5 - it.wrap.position.y) * Math.min(1, dt * 10);
+    it.light.intensity += ((on ? 1.6 : 0.55) - it.light.intensity) * Math.min(1, dt * 8);
+  }
+}
+
+const _lp = new THREE.Vector3();
+function showcaseTick(dt) {
+  if (isMobile) { showcaseTickMobile(dt); return; }
+  // fit the whole lineup in view
+  const vFov = camera.fov * Math.PI / 180;
+  const spanW = (PICK_SPACING * (showcase.items.length - 1)) / 2 + 1.6;
+  const hFov = 2 * Math.atan(Math.tan(vFov / 2) * camera.aspect);
+  const dist = Math.max(1.6 / Math.tan(vFov / 2), spanW / Math.tan(hFov / 2)) + 1.6;
+  showcase.camIn = Math.min(1, showcase.camIn + dt * 0.7);
+  const e = 1 - Math.pow(1 - showcase.camIn, 3);
+  camera.position.set(0, SHOW_Y, dist + (1 - e) * 3);
+  camera.rotation.set(0, 0, 0, "YXZ");
+  camera.lookAt(0, SHOW_Y, 0);
+  camera.updateMatrixWorld(true);
+
+  updateHover();
+  document.body.style.cursor = showcase.hover >= 0 ? "pointer" : "default";
+
+  const anyHover = showcase.hover >= 0;
+  const elapsed = (performance.now() - (showcase.t0 || 0)) / 1000;
+  for (let i = 0; i < showcase.items.length; i++) {
+    const it = showcase.items[i];
+    const on = i === showcase.hover;
+    // staggered reveal: each pedestal scales up from nothing and rises into place
+    const rv = Math.max(0, Math.min(1, (elapsed - it.delay) / 0.6));
+    const rvE = rv * rv * (3 - 2 * rv);
+    const tsc = on ? 2.55 : 1.6;                       // hovered clearly bigger
+    it.sc += (tsc - it.sc) * Math.min(1, dt * 9);
+    it.wrap.scale.setScalar(it.sc * rvE);
+    // hovered turns; everyone else goes idle (still, barely breathing)
+    it.wrap.rotation.y += (on ? 2.1 : 0.12) * dt;
+    it.wrap.position.y += ((on ? 0.2 : 0) + (1 - rvE) * -0.5 - it.wrap.position.y) * Math.min(1, dt * 10);
+    // subtle light: a gentle lift on the hovered one, calm on the rest
+    const target = on ? 1.5 : (anyHover ? 0.5 : 0.85);
+    it.light.intensity += (target - it.light.intensity) * Math.min(1, dt * 8);
+    it.el.classList.toggle("on", on);
+    // label under each pedestal
+    _lp.set(it.x, SHOW_Y - 1.5, 0).project(camera);
+    const sx = (_lp.x * 0.5 + 0.5) * window.innerWidth;
+    const sy = (-_lp.y * 0.5 + 0.5) * window.innerHeight;
+    it.el.style.left = sx + "px";
+    it.el.style.top = sy + "px";
+    it.el.style.opacity = _lp.z > 1 ? "0" : "";
+  }
+}
+
+// ---- Wind (world-space now; server just relays numbers) --------------------
+function applyWind(wx, wy, fx, fy) {
+  const r = 2.2, r2 = r * r;
+  for (const p of parts) {
+    const ex = p.x - wx, ey = p.y - wy;
+    const d2 = ex * ex + ey * ey;
+    if (d2 < r2) {
+      const f = (1 - Math.sqrt(d2) / r) * 0.9;
+      p.vx += fx * f; p.vy += fy * f;
+    }
+  }
+}
+
+// ---- Pointer ---------------------------------------------------------------
+const raycaster = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+const roomPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 2.6); // z = -2.6, a hand's reach ahead
+const hitA = new THREE.Vector3(), hitB = new THREE.Vector3();
+let dragging = false, wasCig = false, lastPX = 0, lastPY = 0, lastSend = 0;
+let selDrag = false, selStartX = 0, curPX = 0; // mobile carousel swipe
+const pointerN = { x: 0, y: 0 }; // for camera parallax
+
+function screenToRoom(px, py, out) {
+  ndc.set((px / window.innerWidth) * 2 - 1, -(py / window.innerHeight) * 2 + 1);
+  raycaster.setFromCamera(ndc, camera);
+  return raycaster.ray.intersectPlane(roomPlane, out);
+}
+function nearOwnCig(px, py) {
+  // your hand is low in frame; anything in the lower ~55% counts as reaching for it
+  return cig.lit && !cig.spent && py > window.innerHeight * 0.45;
+}
+function pointerDown(px, py) {
+  if (mode === "select") {
+    if (isMobile) { selDrag = true; selStartX = curPX = px; return; } // swipe to browse
+    pointerN.x = (px / window.innerWidth) * 2 - 1;
+    pointerN.y = (py / window.innerHeight) * 2 - 1;
+    updateHover();
+    if (showcase.hover >= 0) selectSmoke(showcase.items[showcase.hover].kind);
+    return;
+  }
+  if (mode !== "room") return;
+  dragging = true; lastPX = px; lastPY = py;
+  if (nearOwnCig(px, py)) {
+    wasCig = true; cig.inhaling = true; cig.holdT = 0;
+    setHint("<b>inhaling…</b> release to exhale");
+    document.body.classList.remove("hint-on"); // they figured it out
+  } else wasCig = false;
+}
+function pointerMove(px, py) {
+  curPX = px;
+  if (selDrag) return; // browsing the carousel — ignore look/parallax
+  pointerN.x = (px / window.innerWidth) * 2 - 1;
+  pointerN.y = (py / window.innerHeight) * 2 - 1;
+  if (!dragging) return;
+  if (!wasCig) {
+    if (screenToRoom(lastPX, lastPY, hitA) && screenToRoom(px, py, hitB)) {
+      const fx = (hitB.x - hitA.x) * 1.6, fy = (hitB.y - hitA.y) * 1.6;
+      if (Math.abs(fx) + Math.abs(fy) > 0.005) {
+        applyWind(hitB.x, hitB.y, fx, fy);
+        const now = performance.now();
+        if (now - lastSend > 45) { send({ t: "wind", x: hitB.x, y: hitB.y, dx: fx, dy: fy }); lastSend = now; }
+      }
+    }
+  }
+  lastPX = px; lastPY = py;
+}
+function pointerUp() {
+  if (selDrag) {
+    selDrag = false;
+    const dx = curPX - selStartX;
+    if (Math.abs(dx) > 36) cycleActive(dx < 0 ? 1 : -1); // swipe left → next
+    return;
+  }
+  if (dragging && wasCig && cig.inhaling) {
+    exhale(Math.min(2.6, 0.3 + cig.holdT * 0.8));
+    setHint("hold anywhere to take a drag, release to exhale");
+  }
+  dragging = false; wasCig = false; cig.inhaling = false;
+}
+canvas.addEventListener("pointerdown", (e) => pointerDown(e.clientX, e.clientY));
+window.addEventListener("pointermove", (e) => pointerMove(e.clientX, e.clientY));
+window.addEventListener("pointerup", pointerUp);
+window.addEventListener("pointercancel", pointerUp);
+
+let spaceHeld = false;
+window.addEventListener("keydown", (e) => {
+  if (e.code === "Space" && !spaceHeld && document.activeElement.id !== "msg") {
+    e.preventDefault(); spaceHeld = true;
+    if (cig.lit && !cig.spent) { cig.inhaling = true; cig.holdT = 0; setHint("<b>inhaling…</b> release to exhale"); }
+  }
+});
+window.addEventListener("keyup", (e) => {
+  if (e.code === "Space" && spaceHeld) {
+    spaceHeld = false;
+    if (cig.inhaling) { exhale(Math.min(2.6, 0.3 + cig.holdT * 0.8)); setHint("hold anywhere to take a drag, release to exhale"); }
+    cig.inhaling = false;
+  }
+});
+
+const hintEl = document.getElementById("puffHint");
+const setHint = (h) => (hintEl.innerHTML = h);
+
+// ---- Exhale style chips ----------------------------------------------------
+const STYLES = [
+  { id: "puff", label: "○ puff" },
+  { id: "ring", label: "◎ ring" },
+  { id: "spiral", label: "↯ spiral" },
+];
+const stylesEl = document.getElementById("styles");
+function renderStyles() {
+  stylesEl.innerHTML = "";
+  if (!cig.lit || cig.spent) return;
+  for (const st of STYLES) {
+    const b = document.createElement("button");
+    b.className = "style-chip" + (exhaleStyle === st.id ? " on" : "");
+    b.textContent = st.label;
+    b.onclick = () => { exhaleStyle = st.id; renderStyles(); };
+    stylesEl.appendChild(b);
+  }
+}
+
+// ---- Tray ------------------------------------------------------------------
+const tray = document.getElementById("tray");
+function renderTray() {
+  tray.innerHTML = "";
+  renderStyles();
+  if (cig.lit && !cig.spent) {
+    const b = document.createElement("div");
+    b.className = "smoke-btn"; b.style.cursor = "default";
+    const k = KINDS[cig.kind];
+    const verb = cig.kind === "vape" ? "vaping…" : "burning…";
+    b.innerHTML = `<span class="dot" style="color:${k.color}"></span>${k.label} <small>${verb}</small>`;
+    tray.appendChild(b);
+    return;
+  }
+  for (const [id, k] of Object.entries(KINDS)) {
+    const b = document.createElement("button");
+    b.className = "smoke-btn";
+    b.innerHTML = `<span class="dot" style="color:${k.color}"></span>${k.label} <small>${k.note}</small>`;
+    b.onclick = () => lightUp(id);
+    tray.appendChild(b);
+  }
+}
+
+// ---- Messages (HTML, projected from 3D anchors) ----------------------------
+const msgLayer = document.getElementById("msgs");
+const MSGS = [];
+let mobileLane = 0; // rotates so simultaneous messages start at staggered heights
+function addMessage(anchor, text, hue, mine) {
+  const el = document.createElement("div");
+  el.className = "fmsg" + (mine ? " mine" : "");
+  el.textContent = text;
+  if (!mine) el.style.color = `hsl(${hue},65%,78%)`;
+  msgLayer.appendChild(el);
+  MSGS.push({
+    el, life: 1,
+    pos: anchor.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.3, 0, 0)),
+    vy: 0.11 + Math.random() * 0.05, sway: Math.random() * Math.PI * 2,
+    // mobile: a screen-space rising feed so messages never go off-screen or overlap
+    t0: performance.now(), mxf: 0.5 + (Math.random() - 0.5) * 0.46,
+    lane: mobileLane = (mobileLane + 1) % 3,
+  });
+  if (MSGS.length > 30) { const d = MSGS.shift(); d.el.remove(); }
+}
+const _pv = new THREE.Vector3();
+function tickMessages(dt) {
+  for (let i = MSGS.length - 1; i >= 0; i--) {
+    const m = MSGS[i];
+    m.life -= dt * 0.055;
+    if (m.life <= 0) { m.el.remove(); MSGS.splice(i, 1); continue; }
+    // Mobile: a screen-space rising feed. Other smokers sit off the narrow
+    // viewport, so anchoring to them hides messages — instead each message
+    // rises up the screen in its own lane, always on-screen and never stacked.
+    if (isMobile) {
+      const W = window.innerWidth, H = window.innerHeight;
+      const age = (performance.now() - m.t0) / 1000;
+      const hw = m.el.offsetWidth / 2;
+      const sx = Math.max(12 + hw, Math.min(W - 12 - hw, m.mxf * W));
+      const sy = H * 0.66 - m.lane * 46 - age * (H * 0.05); // staggered start, steady rise
+      m.el.style.transform = `translate(-50%,-50%) translate(${sx}px,${sy}px)`;
+      m.el.style.opacity = String(Math.min(1, m.life * 1.6));
+      continue;
+    }
+    m.sway += dt * 0.9;
+    m.pos.y += m.vy * dt;
+    m.pos.x += Math.sin(m.sway) * 0.12 * dt;
+    _pv.copy(m.pos).project(camera);
+    if (_pv.z > 1) { m.el.style.opacity = "0"; continue; }
+    const sx = (_pv.x * 0.5 + 0.5) * window.innerWidth;
+    const sy = (-_pv.y * 0.5 + 0.5) * window.innerHeight;
+    m.el.style.transform = `translate(-50%,-50%) translate(${sx}px,${sy}px)`;
+    m.el.style.opacity = String(Math.min(1, m.life * 1.6));
+  }
+}
+
+// ---- Message input ---------------------------------------------------------
+const say = document.getElementById("say");
+const msgInput = document.getElementById("msg");
+const sendBtn = document.getElementById("sendBtn");
+msgInput.addEventListener("input", () => (sendBtn.disabled = !msgInput.value.trim()));
+say.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const text = msgInput.value.trim();
+  if (!text) return;
+  send({ t: "msg", text });
+  msgInput.value = ""; sendBtn.disabled = true;
+});
+
+// ============================================================================
+//  Main loop
+// ============================================================================
+const clock = new THREE.Clock();
+let simT = 0;
+let entered = false;
+let camYaw = 0, camPitch = 0;
+
+function frame() {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.05, clock.getDelta());
+  const t = (simT += dt);
+
+  if (mode === "select") {
+    showcaseTick(dt);
+  } else {
+    // ---- first-person camera: eye height, subtle mouse-look, breathing sway ----
+    camT = Math.min(1, camT + dt * (entered ? 0.5 : 0.02));
+    const ease = 1 - Math.pow(1 - camT, 3);
+    const yawT = -pointerN.x * 0.28, pitchT = -pointerN.y * 0.16;
+    camYaw += (yawT - camYaw) * Math.min(1, dt * 3);
+    camPitch += (pitchT - camPitch) * Math.min(1, dt * 3);
+    const breathe = Math.sin(t * 0.9) * 0.012;
+    camera.position.set(0, EYE_Y + breathe + (1 - ease) * -0.25, 0);
+    camera.rotation.set(camPitch + (1 - ease) * -0.35, camYaw, 0, "YXZ");
+    camera.updateMatrixWorld(true);
+  }
+
+  // ---- your burn ----
+  if (mode === "room" && cig.lit && !cig.spent) {
+    const k = KINDS[cig.kind];
+    const inh = cig.inhaling;
+    if (inh) cig.holdT = Math.min(3.2, cig.holdT + dt);
+    // burn faster while holding — and a touch faster the longer the hold is held
+    const mult = inh ? (3.2 + cig.holdT * 1.1) : 0.32;
+    cig.burn += (dt * 1000 / k.burnMs) * k.rate * mult;
+    const s = smokers.get(you.id);
+    if (s) {
+      s.burn = Math.min(1, cig.burn); s.layout();
+      // smoke responds to the hold: a fuller thread that grows a little the longer you hold
+      const hold = Math.min(1.6, cig.holdT);
+      const rate = inh ? (13 + hold * 6) : 11;
+      if (Math.random() < dt * rate) {
+        s.tipWorld(_v1);
+        const intensity = inh ? (0.09 + hold * 0.07) : 0.03;
+        emitSmoke(_v1, cig.kind, intensity, { mult: inh ? 0.36 : 0.22 });
+      }
+    }
+    if (cig.burn >= 1) {
+      cig.burn = 1; cig.lit = false; cig.spent = true;
+      s?.setLit(false);
+      send({ t: "done" });
+      renderTray();
+      openShowcase(); // burned down → back to the lineup to pick another
+    }
+  }
+
+  // ---- cigarette-life panel (right side) ----
+  const smoking = mode === "room" && cig.lit && !cig.spent;
+  document.body.classList.toggle("smoking", smoking);
+  if (smoking && lifeFill) {
+    const left = Math.max(0, 1 - cig.burn);
+    lifeFill.style.height = (left * 100).toFixed(1) + "%";
+    if (lifePct) lifePct.textContent = Math.round(left * 100) + "%";
+  }
+
+  // ---- other smokers passive smolder + tick ----
+  const showCigs = mode === "room";
+  for (const [id, s] of smokers) {
+    s.group.visible = showCigs; // hide cigarette + ember glow on the intro / loadout pages
+    const inhaling = id === you.id && cig.inhaling;
+    s.tick(dt, t, inhaling);
+    if (showCigs && s.lit && id !== you.id && Math.random() < dt * 9) {
+      s.burn = Math.min(0.97, s.burn + dt * 0.004); s.layout();
+      s.tipWorld(_v1);
+      emitSmoke(_v1, s.kindId, 0.05, { mult: 0.4 });
+    }
+  }
+
+  // ---- particles ----
+  const uScale = window.innerHeight * renderer.getPixelRatio() * 0.9;
+  pMat.uniforms.uScale.value = uScale;
+  let alive = 0;
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i];
+    p.life -= p.decay * dt;
+    if (p.life <= 0 || p.y > 11) {
+      pAlpha[p.i] = 0; free.push(p.i);
+      parts[i] = parts[parts.length - 1]; // swap-remove (iterating backwards, so safe)
+      parts.length--;
+      continue;
+    }
+    // turbulence — cheap layered trig noise; grows with age so plumes start laminar
+    p.age += dt;
+    const ny = p.y * 0.7, nt = t * 0.55 + p.seed;
+    const tb = p.turb * Math.min(1, p.age * 0.45) * Math.min(1, 0.25 + p.size * 3);
+    p.vx += (Math.sin(ny * 1.3 + nt) + 0.55 * Math.sin(ny * 3.1 - nt * 1.7)) * 0.05 * tb * dt;
+    p.vz += (Math.cos(ny * 1.1 - nt * 0.8) + 0.5 * Math.sin(ny * 2.7 + nt)) * 0.04 * tb * dt;
+    p.vy += 0.022 * dt;                   // buoyancy
+    p.vx *= (1 - 0.5 * dt); p.vy *= (1 - 0.18 * dt); p.vz *= (1 - 0.5 * dt);
+    p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+    p.size += p.grow * dt;
+    p.angle += p.spin * dt;
+    p.warm = Math.max(0, p.warm - dt * 1.8);
+
+    const j = p.i;
+    pPos[j*3] = p.x; pPos[j*3+1] = p.y; pPos[j*3+2] = p.z;
+    pSize[j] = p.size;
+    pAngle[j] = p.angle;
+    // alpha: quick fade-in by age, long fade-out by life
+    const fadeIn = Math.min(1, p.age * 3.2);
+    // smooth dissolve: alpha falls with life AND with growth so it thins into haze
+    const dissolve = Math.min(1, p.life * 1.4) * (1 / (1 + p.age * 0.35));
+    pAlpha[j] = p.baseA * fadeIn * dissolve;
+    // color: ember-warm at birth → kind tint, dimmed toward the ceiling gloom
+    const w = p.warm * 0.85;
+    const dim = 1.0 - Math.min(0.4, p.y * 0.04);
+    pCol[j*3]   = (p.tr * (1 - w) + EMBER_WARM.r * w) * dim;
+    pCol[j*3+1] = (p.tg * (1 - w) + EMBER_WARM.g * w) * dim;
+    pCol[j*3+2] = (p.tb * (1 - w) + EMBER_WARM.b * w) * dim;
+    alive++;
+  }
+  pGeo.attributes.position.needsUpdate = true;
+  pGeo.attributes.aSize.needsUpdate = true;
+  pGeo.attributes.aAlpha.needsUpdate = true;
+  pGeo.attributes.aAngle.needsUpdate = true;
+  pGeo.attributes.aColor.needsUpdate = true;
+  pGeo.setDrawRange(0, MAX);
+
+  window.__dust?.userData.tick(t);
+  tickMessages(dt);
+  composer.render();
+}
+requestAnimationFrame(frame); // defer first frame so all init (clouds) is ready
+
+// (The loading cloud is a CSS layer on the intro overlay, not 3D particles.)
+
+// Fade the intro smoke in from nothing. If this never runs (or the tab loads
+// hidden), the smoke's resting opacity keeps it visible — it can't get stuck.
+{
+  const smokeFXEl = document.getElementById("smokeFX");
+  smokeFXEl.classList.add("pre");
+  requestAnimationFrame(() => requestAnimationFrame(() => smokeFXEl.classList.remove("pre")));
+}
+
+// ---- Enter overlay ---------------------------------------------------------
+const enterEl = document.getElementById("enter");
+document.getElementById("enterBtn").addEventListener("click", () => {
+  enterEl.classList.add("gone");
+  setTimeout(() => enterEl.remove(), 1400);
+  openShowcase(); // step in → the loadout lineup, not the room
+});
+
+// ---- Back to the loadout lineup --------------------------------------------
+function backToShowcase() {
+  if (mode !== "room") return;
+  // put out the current smoke and tell the room
+  const s = smokers.get(you.id);
+  if (cig.lit && !cig.spent) { s?.setLit(false); send({ t: "done" }); }
+  cig.kind = null; cig.lit = false; cig.spent = false; cig.inhaling = false; cig.holdT = 0;
+  openShowcase();
+}
+document.getElementById("backBtn").addEventListener("click", backToShowcase);
+
+// ---- Brand → back to the main landing page --------------------------------
+document.getElementById("brand").addEventListener("click", () => {
+  const fade = document.getElementById("fade");
+  if (fade) { fade.style.transition = "opacity .5s ease"; fade.style.opacity = "1"; }
+  setTimeout(() => location.reload(), 480);
+});
+
+renderTray();
+connect();
+
+// debug hook
+window.__dbg = () => ({
+  parts: parts.length, free: free.length,
+  youLit: cig.lit, youKind: cig.kind, youId: you.id,
+  smokers: [...smokers.keys()],
+});
+window.__testExhale = (style, intensity = 1) => {
+  const s = smokers.get(you.id);
+  if (s) { s.tipWorld(_v1); emitShape(_v1, cig.kind || "regular", style, intensity); }
+  return parts.length;
+};
+</script>
+</body>
+</html>
