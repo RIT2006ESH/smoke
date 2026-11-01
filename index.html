@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>The Smoking Area</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -438,6 +438,7 @@
 <div id="hud">
   <button class="wm" id="brand" type="button" title="Back to the main page">The Smoking Area</button>
   <div class="right">
+    <div id="teamName"></div>
     <div id="count"><b>1</b> here</div>
     <div id="handle">…</div>
   </div>
@@ -543,7 +544,8 @@ const KINDS = {
 // ---- Renderer / scene ------------------------------------------------------
 const canvas = document.getElementById("c");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+const maxPixelRatio = matchMedia("(max-width: 640px)").matches ? 1.5 : 2;
+renderer.setPixelRatio(Math.min(maxPixelRatio, window.devicePixelRatio || 1));
 renderer.localClippingEnabled = true;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.85;
@@ -1220,16 +1222,46 @@ class Smoker {
 // ============================================================================
 const you = { id: null, x: 0.5, hue: 20, name: "…" };
 const cig = { kind: null, burn: 0, lit: false, spent: false, inhaling: false, holdT: 0 };
+const roomContext = { roomId: new URLSearchParams(location.search).get("roomId"), token: new URLSearchParams(location.search).get("token"), authorized: false, wsUrl: null };
+const roomMembers = new Map();
 
 let ws = null;
 const statusEl = document.getElementById("status");
 const setStatus = (s) => { if (statusEl) statusEl.textContent = s; };
+const apiRequest = async (path, options = {}) => {
+  const headers = { "content-type": "application/json", ...(options.headers || {}) };
+  if (roomContext.token) headers.authorization = `Bearer ${roomContext.token}`;
+  const response = await fetch(path, { ...options, headers });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
+  return data;
+};
 
-function connect() {
+async function connect() {
+  if (!roomContext.authorized) {
+    setStatus("anonymous lounge");
+    return;
+  }
   const proto = location.protocol === "https:" ? "wss" : "ws";
-  ws = new WebSocket(`${proto}://${location.host}`);
+  let endpoint = `${proto}://${location.host}`;
+  if (roomContext.authorized) {
+    const ticket = await apiRequest("/api/v1/realtime/ticket", {
+      method: "POST", body: JSON.stringify({ roomId: roomContext.roomId })
+    });
+    endpoint = `${roomContext.wsUrl || `${proto}://${location.host}/ws`}?ticket=${encodeURIComponent(ticket.ticket)}`;
+  }
+  ws = new WebSocket(endpoint);
   ws.onopen = () => setStatus("in the lounge");
-  ws.onclose = () => { setStatus("disconnected, retrying…"); setTimeout(connect, 1500); };
+  ws.onclose = (ev) => {
+    if (ev && (ev.code === 4003 || roomContext.revoked)) {
+      setStatus("membership revoked");
+      const who = document.getElementById("whoami");
+      if (who) who.textContent = "Your room access was revoked.";
+      return;
+    }
+    setStatus("disconnected, retrying…");
+    setTimeout(connect, 1500);
+  };
   ws.onerror = () => {};
   ws.onmessage = (ev) => { let m; try { m = JSON.parse(ev.data); } catch { return; } handle(m); };
 }
@@ -1290,6 +1322,27 @@ function handle(m) {
       addMessage(anchor, m.text, m.hue, mine);
       break;
     }
+    case "room:message": {
+      const message = m.message || m;
+      const s = smokers.get(message.nodeId);
+      const anchor = message.nodeId === you.id
+        ? new THREE.Vector3(0.15, 1.45, -1.1)
+        : (s ? s.group.position.clone().setY(1.85) : slotToWorld(0.5).setY(1.85));
+      addMessage(anchor, message.text, 20, message.nodeId === you.id);
+      break;
+    }
+    case "room:member_joined":
+    case "room:member_left":
+    case "room:member_removed":
+      if (m.nodeId) {
+        if (m.t === "room:member_left" || m.t === "room:member_removed") roomMembers.delete(m.nodeId);
+        else roomMembers.set(m.nodeId, { nodeId: m.nodeId, online: true });
+        setCount(roomMembers.size || 1);
+      }
+      break;
+    case "room:team_updated":
+      document.getElementById("teamName").textContent = m.teamName || "";
+      break;
   }
 }
 function setCount(n) {
@@ -1803,7 +1856,13 @@ say.addEventListener("submit", (e) => {
   e.preventDefault();
   const text = msgInput.value.trim();
   if (!text) return;
-  send({ t: "msg", text });
+  if (roomContext.authorized) {
+    apiRequest(`/api/v1/rooms/${encodeURIComponent(roomContext.roomId)}/messages`, {
+      method: "POST", body: JSON.stringify({ text })
+    }).catch((error) => setStatus(error.message));
+  } else {
+    send({ t: "msg", text });
+  }
   msgInput.value = ""; sendBtn.disabled = true;
 });
 
@@ -1815,8 +1874,14 @@ let simT = 0;
 let entered = false;
 let camYaw = 0, camPitch = 0;
 
+let animationFrame = 0;
+let renderingActive = !document.hidden;
 function frame() {
-  requestAnimationFrame(frame);
+  if (!renderingActive) {
+    animationFrame = 0;
+    return;
+  }
+  animationFrame = requestAnimationFrame(frame);
   const dt = Math.min(0.05, clock.getDelta());
   const t = (simT += dt);
 
@@ -1940,7 +2005,15 @@ function frame() {
   tickMessages(dt);
   composer.render();
 }
-requestAnimationFrame(frame); // defer first frame so all init (clouds) is ready
+function setRenderingActive(active) {
+  renderingActive = active;
+  if (active && !animationFrame) animationFrame = requestAnimationFrame(frame);
+}
+document.addEventListener("visibilitychange", () => {
+  setRenderingActive(!document.hidden);
+  if (!document.hidden) resize();
+});
+setRenderingActive(true); // defer first frame so all init (clouds) is ready
 
 // (The loading cloud is a CSS layer on the intro overlay, not 3D particles.)
 
@@ -1979,7 +2052,41 @@ document.getElementById("brand").addEventListener("click", () => {
 });
 
 renderTray();
-connect();
+
+async function initializeNetwork() {
+  if (!roomContext.roomId || !roomContext.token) {
+    connect();
+    return;
+  }
+  try {
+    setStatus("authorizing private room…");
+    const authorization = await apiRequest(`/api/v1/rooms/${encodeURIComponent(roomContext.roomId)}/authorize`, {
+      method: "POST", body: "{}"
+    });
+    roomContext.authorized = true;
+    roomContext.wsUrl = authorization.realtime?.url?.startsWith("ws")
+      ? authorization.realtime.url : null;
+    you.id = authorization.nodeId;
+    you.name = authorization.nodeId;
+    document.getElementById("handle").textContent = `${you.name} · ${authorization.role}`;
+    document.getElementById("teamName").textContent = authorization.teamName || "";
+    getSmoker(you.id, you.x, you.hue);
+    const members = await apiRequest(`/api/v1/rooms/${encodeURIComponent(roomContext.roomId)}/members`);
+    for (const member of members.members || []) roomMembers.set(member.nodeId, member);
+    setCount(roomMembers.size || 1);
+    const history = await apiRequest(`/api/v1/rooms/${encodeURIComponent(roomContext.roomId)}/messages?limit=50`);
+    for (const message of history.messages || []) {
+      const anchor = message.nodeId === you.id
+        ? new THREE.Vector3(0.15, 1.45, -1.1) : slotToWorld(0.5).setY(1.85);
+      addMessage(anchor, message.text, 20, message.nodeId === you.id);
+    }
+    await connect();
+  } catch (error) {
+    setStatus(`private room unavailable: ${error.message}`);
+    document.getElementById("whoami").textContent = "This room link is no longer authorized.";
+  }
+}
+initializeNetwork();
 
 // debug hook
 window.__dbg = () => ({
